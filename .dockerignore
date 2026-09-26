@@ -24,6 +24,7 @@ custom
 .idea
 *.md
 !src/seed/*.md
+!docs/**/*.md
 Dockerfile
 docker-compose*.yml
 docker-bake.hcl

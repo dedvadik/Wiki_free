@@ -72,6 +72,8 @@ COPY --chown=node:node package.json ./
 COPY --chown=node:node src ./src
 COPY --chown=node:node views ./views
 COPY --chown=node:node public ./public
+# Техническая документация для импорта на портал (npm run docs:import).
+COPY --chown=node:node docs ./docs
 
 # Папки для данных и кастомизации. Создаём заранее с владельцем node:
 # именованный Docker volume при первом подключении унаследует эти права.

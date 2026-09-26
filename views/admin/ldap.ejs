@@ -13,21 +13,22 @@
 %>
 <%- include('/partials/header', { title: 'LDAP / Active Directory' }) %>
 
-<div class="container">
-  <h1>LDAP / Active Directory</h1>
-  <%- include('/partials/admin-nav') %>
+<div class="settings-shell">
+  <%- include('/partials/settings-nav', { area: 'admin', active: 'ldap' }) %>
+
+  <section class="settings-main">
+  <header class="settings-header">
+    <h1>LDAP / Active Directory</h1>
+    <p>Пользователи каталога входят со своим корпоративным логином и паролем. Учётная запись на сайте
+      создаётся при первом входе, а имя, email и (если заданы группы) роль обновляются при каждом входе.</p>
+  </header>
+
   <%- include('/partials/errors') %>
 
-  <p class="muted">
-    Пользователи каталога входят на сайт со своим корпоративным логином и паролем.
-    Учётная запись на сайте создаётся автоматически при первом входе, а имя, email
-    и (если заданы группы) роль обновляются из каталога при каждом входе.
-  </p>
-
   <%# ---------------------- Проверка подключения ------------------------ %>
-  <form method="post" action="/admin/ldap/test" class="card ldap-test" autocomplete="off">
+  <form method="post" action="/admin/ldap/test" class="card settings-card ldap-test" autocomplete="off">
     <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
-    <h2 class="card-title">Проверить подключение</h2>
+    <h2 class="settings-card-title">Проверить подключение</h2>
     <p class="help">Проверяются <b>сохранённые</b> настройки. Логин и пароль необязательны: без них проверяется только
       подключение к серверу, без пароля — поиск пользователя и определение роли.</p>
     <div class="field-row">
@@ -77,9 +78,9 @@
   <% }) %>
 
   <%# --------------------------- Шпаргалка ------------------------------ %>
-  <details class="card">
+  <details class="card settings-card">
     <summary><b>Типовые значения для OpenLDAP и Active Directory</b></summary>
-    <table class="table kv">
+    <div class="table-wrap"><table class="table kv">
       <thead><tr><th>Параметр</th><th>OpenLDAP / FreeIPA</th><th>Active Directory</th></tr></thead>
       <tbody>
         <tr><th>Адрес</th><td><code>ldap://ldap.example.com:389</code></td><td><code>ldaps://dc01.corp.example.com:636</code></td></tr>
@@ -90,8 +91,9 @@
         <tr><th>Атрибут имени</th><td><code>cn</code></td><td><code>displayName</code></td></tr>
         <tr><th>Группа</th><td><code>cn=wiki-admins,ou=groups,dc=example,dc=com</code></td><td><code>CN=Wiki Admins,OU=Groups,DC=corp,DC=example,DC=com</code></td></tr>
       </tbody>
-    </table>
+    </table></div>
   </details>
+  </section>
 </div>
 
 <%- include('/partials/footer') %>

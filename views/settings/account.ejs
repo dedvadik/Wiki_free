@@ -1,0 +1,68 @@
+<%#
+  ============================================================================
+  settings/account.ejs — «Настройки → Учётная запись»
+  ----------------------------------------------------------------------------
+  Имя и email. Логин и роль показываются только для справки (их меняет
+  администратор). У LDAP-пользователей все данные только для чтения:
+  они приходят из каталога и обновляются при каждом входе.
+  Переменные: errors, values (введённые значения при ошибке или null)
+  ============================================================================
+%>
+<% const isLdap = currentUser.auth_source === 'ldap';
+   const v = values || { display_name: currentUser.display_name, email: currentUser.email }; %>
+<%- include('/partials/header', { title: 'Учётная запись' }) %>
+
+<div class="settings-shell">
+  <%- include('/partials/settings-nav', { area: 'user', active: 'account' }) %>
+
+  <section class="settings-main">
+    <header class="settings-header">
+      <h1>Учётная запись</h1>
+      <p>Как вас видят другие пользователи и куда приходят уведомления.</p>
+    </header>
+
+    <%- include('/partials/errors') %>
+
+    <% if (isLdap) { %>
+      <div class="card settings-card">
+        <h2 class="settings-card-title">Личные данные <span class="badge">LDAP</span></h2>
+        <dl class="settings-list">
+          <div><dt>Имя</dt><dd><%= currentUser.display_name %></dd></div>
+          <div><dt>Email</dt><dd><%= currentUser.email %></dd></div>
+          <div><dt>Логин</dt><dd>@<%= currentUser.username %></dd></div>
+          <div><dt>Роль</dt><dd><span class="role role-<%= currentUser.role %>"><%= roleNames[currentUser.role] %></span></dd></div>
+        </dl>
+        <p class="settings-card-note">Вы входите с корпоративной учётной записью. Имя, email и пароль управляются
+          в каталоге (LDAP / Active Directory) и обновляются здесь при каждом входе.</p>
+      </div>
+    <% } else { %>
+      <form method="post" action="/settings/account" class="card settings-card form">
+        <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+        <h2 class="settings-card-title">Личные данные</h2>
+        <div class="field">
+          <label for="display_name">Имя</label>
+          <input id="display_name" name="display_name" value="<%= v.display_name %>" required maxlength="100" autocomplete="name">
+          <p class="help">Показывается как автор статей и комментариев.</p>
+        </div>
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" name="email" value="<%= v.email %>" required autocomplete="email">
+        </div>
+        <div class="settings-card-actions">
+          <button class="btn btn-primary" type="submit">Сохранить</button>
+        </div>
+      </form>
+
+      <div class="card settings-card">
+        <h2 class="settings-card-title">Сведения</h2>
+        <dl class="settings-list">
+          <div><dt>Логин</dt><dd>@<%= currentUser.username %></dd></div>
+          <div><dt>Роль</dt><dd><span class="role role-<%= currentUser.role %>"><%= roleNames[currentUser.role] %></span></dd></div>
+        </dl>
+        <p class="settings-card-note">Логин и роль меняет администратор.</p>
+      </div>
+    <% } %>
+  </section>
+</div>
+
+<%- include('/partials/footer') %>

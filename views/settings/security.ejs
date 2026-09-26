@@ -1,0 +1,85 @@
+<%#
+  ============================================================================
+  settings/security.ejs — «Настройки → Безопасность»
+  ----------------------------------------------------------------------------
+  Смена пароля (для локальных учётных записей) и управление сеансами:
+  сколько ещё браузеров/устройств вошли в учётную запись и кнопка
+  «Выйти на всех других устройствах».
+  Переменные: errors, otherSessions (число других активных сеансов)
+  ============================================================================
+%>
+<% const isLdap = currentUser.auth_source === 'ldap'; %>
+<%- include('/partials/header', { title: 'Безопасность' }) %>
+
+<div class="settings-shell">
+  <%- include('/partials/settings-nav', { area: 'user', active: 'security' }) %>
+
+  <section class="settings-main">
+    <header class="settings-header">
+      <h1>Безопасность</h1>
+      <p>Пароль и устройства, на которых выполнен вход.</p>
+    </header>
+
+    <%- include('/partials/errors') %>
+
+    <% if (isLdap) { %>
+      <div class="card settings-card">
+        <h2 class="settings-card-title">Пароль</h2>
+        <p class="settings-card-note">Пароль вашей корпоративной учётной записи хранится в каталоге LDAP и меняется там же —
+          обычно через корпоративный портал или службу поддержки.</p>
+      </div>
+    <% } else { %>
+      <form method="post" action="/settings/password" class="card settings-card form">
+        <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+        <h2 class="settings-card-title">Смена пароля</h2>
+        <div class="field">
+          <label for="current_password">Текущий пароль</label>
+          <input id="current_password" type="password" name="current_password" required autocomplete="current-password">
+        </div>
+        <div class="field-row">
+          <div class="field grow">
+            <label for="new_password">Новый пароль</label>
+            <input id="new_password" type="password" name="new_password" required minlength="8" autocomplete="new-password">
+          </div>
+          <div class="field grow">
+            <label for="new_password_confirm">Повторите пароль</label>
+            <input id="new_password_confirm" type="password" name="new_password_confirm" required minlength="8" autocomplete="new-password">
+          </div>
+        </div>
+        <p class="help">Не короче 8 символов. После смены пароля сеансы на других устройствах будут завершены.</p>
+        <div class="settings-card-actions">
+          <button class="btn btn-primary" type="submit">Изменить пароль</button>
+        </div>
+      </form>
+    <% } %>
+
+    <%# --------------------------- Сеансы --------------------------------- %>
+    <form method="post" action="/settings/sessions/revoke" class="card settings-card"
+          data-confirm="Выйти на всех других устройствах? На этом устройстве вы останетесь в системе.">
+      <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+      <h2 class="settings-card-title">Сеансы</h2>
+      <div class="settings-row">
+        <span class="settings-tile" style="--tile: #34c759"><%- icon('monitor') %></span>
+        <div class="grow">
+          <strong>Это устройство</strong>
+          <div class="muted small">Текущий сеанс</div>
+        </div>
+        <span class="badge">активен</span>
+      </div>
+      <div class="settings-row">
+        <span class="settings-tile" style="--tile: #8e8e93"><%- icon('globe') %></span>
+        <div class="grow">
+          <strong>Другие устройства и браузеры</strong>
+          <div class="muted small">
+            <%= otherSessions ? `Выполнен вход: ${plural(otherSessions, 'сеанс', 'сеанса', 'сеансов')}` : 'Нет других активных сеансов' %>
+          </div>
+        </div>
+        <% if (otherSessions) { %>
+          <button class="btn btn-sm" type="submit"><%- icon('log-out') %> Выйти везде</button>
+        <% } %>
+      </div>
+    </form>
+  </section>
+</div>
+
+<%- include('/partials/footer') %>

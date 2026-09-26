@@ -71,19 +71,25 @@
 
       <% if (currentUser) { %>
         <%# Выпадающее меню на <details>: работает даже без JavaScript. %>
+        <%# Три отдельных раздела: Профиль (информация), Настройки (личные),
+            Администрирование (настройки сайта — только для админов). %>
         <details class="dropdown user-menu">
-          <summary class="avatar" title="<%= currentUser.display_name %>"><%= initials(currentUser.display_name) %></summary>
+          <summary class="avatar" title="<%= currentUser.display_name %>"
+                   style="--avatar-h: <%= avatarHue(currentUser.display_name) %>"><%= initials(currentUser.display_name) %></summary>
           <div class="menu menu-right">
-            <div class="menu-header">
-              <strong><%= currentUser.display_name %></strong>
-              <small>@<%= currentUser.username %> · <%= roleNames[currentUser.role] %></small>
-            </div>
-            <a href="/profile">Профиль</a>
-            <% if (site.allow_user_themes) { %><a href="/profile#theme">Тема оформления</a><% } %>
-            <% if (can('admin')) { %><a href="/admin">Администрирование</a><% } %>
-            <form method="post" action="/logout">
+            <a class="menu-header" href="/profile">
+              <span class="avatar avatar-md" style="--avatar-h: <%= avatarHue(currentUser.display_name) %>"><%= initials(currentUser.display_name) %></span>
+              <span>
+                <strong><%= currentUser.display_name %></strong>
+                <small>@<%= currentUser.username %> · <%= roleNames[currentUser.role] %></small>
+              </span>
+            </a>
+            <a href="/profile"><%- icon('user') %> Профиль</a>
+            <a href="/settings"><%- icon('settings') %> Настройки</a>
+            <% if (can('admin')) { %><a href="/admin"><%- icon('sliders') %> Администрирование</a><% } %>
+            <form method="post" action="/logout" class="menu-form">
               <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
-              <button type="submit">Выйти</button>
+              <button type="submit"><%- icon('log-out') %> Выйти</button>
             </form>
           </div>
         </details>
@@ -103,7 +109,7 @@
 <% if (themePreview) { %>
   <div class="announcement theme-preview-banner" role="status">
     Предпросмотр темы «<%= activeTheme.name %>» — применена только к этой странице.
-    <% if (currentUser && site.allow_user_themes) { %><a href="/profile#theme">Выбрать в профиле</a> ·<% } %>
+    <% if (currentUser && site.allow_user_themes) { %><a href="/settings/appearance">Выбрать в настройках</a> ·<% } %>
     <a href="<%= currentPath %>">Закрыть предпросмотр</a>
   </div>
 <% } %>

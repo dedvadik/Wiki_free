@@ -150,18 +150,16 @@ h1, .page-title { font-weight: 700; }
 .search-box input::placeholder { color: var(--text-muted); opacity: 1; }
 .search-box input:focus { background-color: var(--surface); box-shadow: 0 0 0 4px var(--primary-soft); }
 
+/* Кнопки шапки. Префикс .topbar повышает специфичность: общее правило .btn
+   (раздел 4 ниже) иначе перекрыло бы их фон. */
 .topbar .btn { height: 36px; padding: 0 16px; font-size: .92rem; }
-.btn-create { background: var(--primary); border-color: transparent; color: #fff; }
-.btn-create:hover { background: var(--primary-hover); }
-.btn-on-header { background: var(--fill); border-color: transparent; color: var(--header-text); }
-.btn-on-header:hover { background: var(--fill-hover); }
+.topbar .btn-create { background: var(--primary); border-color: transparent; color: #fff; }
+.topbar .btn-create:hover { background: var(--primary-hover); }
+.topbar .btn-on-header { background: var(--fill); border-color: transparent; color: var(--header-text); }
+.topbar .btn-on-header:hover { background: var(--fill-hover); }
 .icon-btn { width: 38px; height: 38px; font-size: 1.15rem; }
 .icon-btn:hover { background: var(--fill); }
-.user-menu .avatar {
-  width: 36px; height: 36px;
-  background: linear-gradient(135deg, #5ac8fa, #007aff);
-  box-shadow: none;
-}
+.user-menu > summary.avatar { width: 36px; height: 36px; box-shadow: none; }
 
 /* Меню — стеклянная панель; пункт при наведении подсвечивается как в macOS. */
 .menu {
@@ -175,6 +173,8 @@ h1, .page-title { font-weight: 700; }
 }
 .menu a, .menu button { border-radius: 8px; padding: 7px 12px; }
 .menu a:hover, .menu button:hover { background: var(--primary); color: #fff; }
+.menu a:hover .icon, .menu button:hover .icon { color: inherit; }
+.menu .menu-header:hover { background: var(--bg-hover); color: var(--text); }
 .menu .danger:hover { background: var(--danger); color: #fff; }
 .menu-header { padding: 6px 12px 10px; border-bottom-color: var(--hairline); }
 .menu-form { border-top-color: var(--hairline); }
@@ -225,18 +225,38 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px var(--primary-
 .table th { text-transform: none; letter-spacing: 0; font-size: .85rem; }
 .role { border-radius: 980px; }
 
-/* Вкладки админки → сегментированный переключатель iOS/macOS. */
-.tabs {
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-  border-bottom: 0;
-  border-radius: 10px;
-  background: var(--fill);
+/* Настройки и администрирование: меню разделов — стеклянная панель как
+   сайдбар «Системных настроек» macOS; выбранный пункт залит акцентным
+   цветом с белым текстом. Переключатели — зелёные, как в iOS. */
+.settings-nav {
+  border: 0;
+  border-radius: 18px;
+  background: var(--glass-panel);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
 }
-.tabs a { margin: 0; padding: 6px 16px; border: 0; border-radius: 8px; color: var(--text); }
-.tabs a.active { color: var(--text); background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
-:root[data-mode="dark"] .tabs a.active { background: #636366; }
+.settings-nav-profile, .settings-nav-heading, .settings-nav-footer { border-color: var(--hairline); }
+.settings-nav-link { border-radius: 8px; padding: 6px 8px; }
+.settings-nav-link.active { background: var(--primary); color: #fff; }
+.settings-nav-link.active .badge { background: rgba(255, 255, 255, .25); color: #fff; }
+.settings-tile { border-radius: 7px; }
+.settings-card-actions, .settings-list > div, .settings-row, .field-switch { border-color: var(--hairline); }
+.settings-row-link + .settings-row-link { box-shadow: 0 -1px 0 var(--hairline); }
+.settings-header h1 { font-size: 2.1rem; }
+:root { --switch-on: #34c759; }
+:root[data-mode="dark"] { --switch-on: #30d158; }
+
+/* Сегментированный переключатель в духе iOS. */
+.segmented { border: 0; border-radius: 10px; background: var(--fill); }
+.segmented span { border-radius: 8px; color: var(--text); }
+.segmented input:checked + span { background: var(--surface); }
+:root[data-mode="dark"] .segmented input:checked + span { background: #636366; }
+
+/* Профиль и плитки статистики. */
+.profile-hero { border-radius: 22px; }
+.profile-cover { height: 170px; }
+.profile-stat, .stat-tile { border-radius: 18px; }
+.profile-stat .settings-tile, .stat-tile .settings-tile { border-radius: 10px; }
 
 .auth-card { border-radius: 22px; padding: 36px; }
 .danger-zone { box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--danger) 35%, transparent); }

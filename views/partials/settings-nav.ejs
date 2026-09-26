@@ -1,0 +1,75 @@
+<%#
+  ============================================================================
+  partials/settings-nav.ejs — боковое меню разделов «Настроек» и
+  «Администрирования» (в стиле «Системных настроек» macOS)
+  ----------------------------------------------------------------------------
+  Параметры:
+    area   — 'user' (личные настройки) или 'admin' (администрирование)
+    active — ключ текущего пункта (подсвечивается)
+
+  У каждого пункта — цветная «плитка» с иконкой; цвет задаётся переменной
+  --tile в атрибуте style. Чтобы добавить пункт, допишите объект в массив.
+  На узких экранах меню превращается в горизонтальную ленту (см. app.css).
+  ============================================================================
+%>
+<% const items = area === 'admin' ? [
+     { key: 'overview',   href: '/admin',                     icon: 'bar-chart', tile: '#5856d6', label: 'Обзор' },
+     { key: 'general',    href: '/admin/settings/general',    icon: 'globe',     tile: '#8e8e93', label: 'Общие' },
+     { key: 'access',     href: '/admin/settings/access',     icon: 'lock',      tile: '#ff9500', label: 'Доступ и права' },
+     { key: 'appearance', href: '/admin/settings/appearance', icon: 'droplet',   tile: '#af52de', label: 'Оформление' },
+     { key: 'ldap',       href: '/admin/ldap',                icon: 'server',    tile: '#30b0c7', label: 'LDAP', badge: site.ldap_enabled ? 'вкл' : '' },
+     { key: 'users',      href: '/admin/users',               icon: 'users',     tile: '#007aff', label: 'Пользователи' },
+   ] : [
+     { key: 'account',    href: '/settings/account',          icon: 'user',      tile: '#007aff', label: 'Учётная запись' },
+     { key: 'security',   href: '/settings/security',         icon: 'shield',    tile: '#34c759', label: 'Безопасность' },
+     { key: 'appearance', href: '/settings/appearance',       icon: 'droplet',   tile: '#af52de', label: 'Оформление' },
+   ]; %>
+<nav class="settings-nav" aria-label="<%= area === 'admin' ? 'Разделы администрирования' : 'Разделы настроек' %>">
+  <%# Шапка меню: в личных настройках — карточка пользователя со ссылкой на
+      профиль (как Apple ID в macOS), в админке — заголовок раздела. %>
+  <% if (area === 'user') { %>
+    <a class="settings-nav-profile" href="/profile">
+      <span class="avatar avatar-md" style="--avatar-h: <%= avatarHue(currentUser.display_name) %>"><%= initials(currentUser.display_name) %></span>
+      <span class="settings-nav-profile-text">
+        <strong><%= currentUser.display_name %></strong>
+        <small>Открыть профиль</small>
+      </span>
+    </a>
+  <% } else { %>
+    <div class="settings-nav-heading">
+      <span class="settings-tile" style="--tile: #1c1c1e"><%- icon('sliders') %></span>
+      <span><strong>Администрирование</strong><small><%= site.site_name %></small></span>
+    </div>
+  <% } %>
+
+  <ul class="settings-nav-list">
+    <% items.forEach((item) => { %>
+      <li>
+        <a class="settings-nav-link <%= active === item.key ? 'active' : '' %>" href="<%= item.href %>"
+           <%= active === item.key ? 'aria-current=page' : '' %>>
+          <span class="settings-tile" style="--tile: <%= item.tile %>"><%- icon(item.icon) %></span>
+          <span class="settings-nav-label"><%= item.label %></span>
+          <% if (item.badge) { %><span class="badge"><%= item.badge %></span><% } %>
+        </a>
+      </li>
+    <% }) %>
+  </ul>
+
+  <%# Переход между «Настройками» и «Администрированием» (у обычного
+      пользователя подвала нет вовсе). %>
+  <% if (area === 'admin' || can('admin')) { %>
+    <div class="settings-nav-footer">
+      <% if (area === 'user') { %>
+        <a class="settings-nav-link" href="/admin">
+          <span class="settings-tile" style="--tile: #1c1c1e"><%- icon('sliders') %></span>
+          <span class="settings-nav-label">Администрирование</span><%- icon('chevron-right', 'muted') %>
+        </a>
+      <% } else { %>
+        <a class="settings-nav-link" href="/settings">
+          <span class="settings-tile" style="--tile: #007aff"><%- icon('settings') %></span>
+          <span class="settings-nav-label">Мои настройки</span><%- icon('chevron-right', 'muted') %>
+        </a>
+      <% } %>
+    </div>
+  <% } %>
+</nav>

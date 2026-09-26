@@ -1,0 +1,74 @@
+<%#
+  ============================================================================
+  settings/appearance.ejs — «Настройки → Оформление»
+  ----------------------------------------------------------------------------
+  1. Тема оформления — сохраняется в учётной записи (действует на всех
+     устройствах). Если выбор тем отключён администратором — только
+     сообщение о теме сайта.
+  2. Режим (светлый/тёмный/как в системе) и 3. режим редактора по
+     умолчанию — настройки ЭТОГО браузера (localStorage). Переключатели
+     работают сразу, без кнопки «Сохранить» (обработчики в public/js/app.js,
+     атрибуты data-pref="color-mode" / data-pref="editor-mode").
+  Переменные: themes, siteTheme
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'Оформление' }) %>
+
+<div class="settings-shell">
+  <%- include('/partials/settings-nav', { area: 'user', active: 'appearance' }) %>
+
+  <section class="settings-main">
+    <header class="settings-header">
+      <h1>Оформление</h1>
+      <p>Внешний вид сайта — только для вас.</p>
+    </header>
+
+    <%# ------------------------ Тема оформления --------------------------- %>
+    <% if (site.allow_user_themes) { %>
+      <form method="post" action="/settings/theme" class="card settings-card" id="theme">
+        <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+        <h2 class="settings-card-title">Тема оформления</h2>
+        <p class="settings-card-note">Сохраняется в учётной записи и действует на всех ваших устройствах.</p>
+        <%- include('/partials/theme-picker', {
+              name: 'theme',
+              selected: currentUser.theme || '',
+              themes,
+              defaultOption: `Как на сайте — сейчас «${siteTheme ? siteTheme.name : 'Классическая'}»`,
+            }) %>
+        <div class="settings-card-actions">
+          <button class="btn btn-primary" type="submit">Применить тему</button>
+        </div>
+      </form>
+    <% } else { %>
+      <div class="card settings-card">
+        <h2 class="settings-card-title">Тема оформления</h2>
+        <p class="settings-card-note">Тему сайта выбирает администратор. Сейчас используется тема
+          «<%= siteTheme ? siteTheme.name : 'Классическая' %>».</p>
+      </div>
+    <% } %>
+
+    <%# -------------------- Режим: светлый / тёмный ----------------------- %>
+    <div class="card settings-card">
+      <h2 class="settings-card-title">Светлый и тёмный режим</h2>
+      <div class="segmented" role="radiogroup" aria-label="Режим оформления">
+        <label><input type="radio" class="visually-hidden" name="color-mode" value="light" data-pref="color-mode"><span><%- icon('sun') %> Светлый</span></label>
+        <label><input type="radio" class="visually-hidden" name="color-mode" value="dark" data-pref="color-mode"><span><%- icon('moon') %> Тёмный</span></label>
+        <label><input type="radio" class="visually-hidden" name="color-mode" value="auto" data-pref="color-mode"><span><%- icon('monitor') %> Как в системе</span></label>
+      </div>
+      <p class="settings-card-note">Применяется сразу и запоминается в этом браузере. Быстро переключить режим можно кнопкой ◐ в шапке.</p>
+    </div>
+
+    <%# ------------------------- Редактор ---------------------------------- %>
+    <div class="card settings-card">
+      <h2 class="settings-card-title">Редактор страниц</h2>
+      <div class="segmented" role="radiogroup" aria-label="Режим редактора по умолчанию">
+        <label><input type="radio" class="visually-hidden" name="editor-mode" value="edit" data-pref="editor-mode"><span><%- icon('edit') %> Текст</span></label>
+        <label><input type="radio" class="visually-hidden" name="editor-mode" value="split" data-pref="editor-mode"><span><%- icon('layout') %> Текст и просмотр</span></label>
+        <label><input type="radio" class="visually-hidden" name="editor-mode" value="preview" data-pref="editor-mode"><span><%- icon('file-text') %> Просмотр</span></label>
+      </div>
+      <p class="settings-card-note">Какой вид открывается в редакторе по умолчанию (запоминается в этом браузере).</p>
+    </div>
+  </section>
+</div>
+
+<%- include('/partials/footer') %>

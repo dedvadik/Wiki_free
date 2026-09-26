@@ -1,0 +1,47 @@
+{
+  "space": {
+    "key": "CODE",
+    "name": "Код портала",
+    "icon": "💻",
+    "color": "#5856d6",
+    "description": "Техническая документация WikiSpace: как устроен код портала, где что лежит и как его расширять.\n\nСтраницы этого пространства публикуются из файлов `docs/portal/*.md` репозитория командой `npm run docs:import` — правьте документацию вместе с кодом, а не только здесь."
+  },
+  "pages": [
+    {
+      "title": "Как устроен портал",
+      "file": "00-overview.md",
+      "labels": ["архитектура", "код"],
+      "children": [
+        { "title": "Запуск и обработка запроса", "file": "01-startup.md", "labels": ["архитектура", "express"] },
+        { "title": "База данных", "file": "02-database.md", "labels": ["postgresql", "миграции"] },
+        { "title": "Безопасность", "file": "03-security.md", "labels": ["безопасность"] }
+      ]
+    },
+    {
+      "title": "Серверная часть",
+      "file": "10-backend.md",
+      "labels": ["backend", "код"],
+      "children": [
+        { "title": "Маршруты", "file": "11-routes.md", "labels": ["backend", "api"] },
+        { "title": "Middleware", "file": "12-middleware.md", "labels": ["backend", "express"] },
+        { "title": "Настройки сайта", "file": "13-settings.md", "labels": ["backend", "настройки"] },
+        { "title": "Статьи: разметка, дерево, версии, поиск", "file": "14-content.md", "labels": ["backend", "markdown", "поиск"] },
+        { "title": "Пользователи, вход и LDAP", "file": "15-auth.md", "labels": ["backend", "ldap", "безопасность"] },
+        { "title": "Вложения", "file": "16-uploads.md", "labels": ["backend", "файлы"] },
+        { "title": "Первый запуск и импорт документации", "file": "17-bootstrap.md", "labels": ["backend", "документация"] }
+      ]
+    },
+    {
+      "title": "Интерфейс",
+      "file": "20-frontend.md",
+      "labels": ["frontend", "код"],
+      "children": [
+        { "title": "Шаблоны EJS", "file": "21-templates.md", "labels": ["frontend", "ejs"] },
+        { "title": "Стили и темы оформления", "file": "22-styles.md", "labels": ["frontend", "css", "темы"] },
+        { "title": "Клиентский JavaScript", "file": "23-client-js.md", "labels": ["frontend", "javascript"] }
+      ]
+    },
+    { "title": "Развёртывание в Docker", "file": "30-docker.md", "labels": ["docker", "devops"] },
+    { "title": "Как расширять портал", "file": "40-extending.md", "labels": ["рецепты", "код"] }
+  ]
+}

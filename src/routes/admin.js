@@ -2,11 +2,16 @@
  * ============================================================================
  *  routes/admin.js — администрирование (только роль admin)
  * ============================================================================
+ *  Раздел устроен как «Системные настройки»: слева меню разделов
+ *  (views/partials/settings-nav.ejs), справа содержимое раздела.
+ *
  *  Маршруты:
- *    GET  /admin                  — обзор: статистика и сведения о системе
- *    GET  /admin/settings         — форма настроек сайта (строится по схеме)
- *    POST /admin/settings         — сохранение настроек
- *    POST /admin/settings/reset   — сброс группы настроек к умолчаниям
+ *    GET  /admin                     — обзор: статистика, система, разделы
+ *    GET  /admin/settings            — перенаправление на первый раздел
+ *    GET  /admin/settings/:section   — раздел настроек сайта: general | access |
+ *                                      appearance (поля строятся по схеме)
+ *    POST /admin/settings/:section   — сохранение полей ТОЛЬКО этого раздела
+ *    POST /admin/settings/reset      — сброс группы настроек к умолчаниям
  *    GET  /admin/ldap             — настройки входа через LDAP / Active Directory
  *    POST /admin/ldap             — сохранение настроек LDAP
  *    POST /admin/ldap/test        — пошаговая проверка подключения к LDAP
@@ -43,17 +48,22 @@ adminRouter.use('/admin', requireRole('admin'));
 /* =============================== ОБЗОР =================================== */
 
 adminRouter.get('/admin', async (req, res) => {
-  const stats = await one(
-    `SELECT (SELECT count(*)::int FROM users)          AS users,
-            (SELECT count(*)::int FROM spaces)         AS spaces,
-            (SELECT count(*)::int FROM pages)          AS pages,
-            (SELECT count(*)::int FROM page_versions)  AS versions,
-            (SELECT count(*)::int FROM comments)       AS comments,
-            (SELECT count(*)::int FROM attachments)    AS attachments,
-            (SELECT coalesce(sum(size_bytes), 0)::bigint FROM attachments) AS attachments_size,
-            pg_size_pretty(pg_database_size(current_database())) AS db_size,
-            version() AS pg_version`,
-  );
+  const [stats, newestUsers] = await Promise.all([
+    one(
+      `SELECT (SELECT count(*)::int FROM users)          AS users,
+              (SELECT count(*)::int FROM users WHERE last_login_at > now() - interval '30 days') AS active_users,
+              (SELECT count(*)::int FROM users WHERE auth_source = 'ldap') AS ldap_users,
+              (SELECT count(*)::int FROM spaces)         AS spaces,
+              (SELECT count(*)::int FROM pages)          AS pages,
+              (SELECT count(*)::int FROM page_versions)  AS versions,
+              (SELECT count(*)::int FROM comments)       AS comments,
+              (SELECT count(*)::int FROM attachments)    AS attachments,
+              (SELECT coalesce(sum(size_bytes), 0)::bigint FROM attachments) AS attachments_size,
+              pg_size_pretty(pg_database_size(current_database())) AS db_size,
+              current_setting('server_version') AS pg_version`,
+    ),
+    many('SELECT id, username, display_name, role, auth_source, created_at FROM users ORDER BY created_at DESC LIMIT 5'),
+  ]);
   /* Сведения о среде: пригодятся, чтобы убедиться, на какой архитектуре
    * (amd64/arm64) реально запущен мультиплатформенный образ. */
   const system = {
@@ -63,47 +73,65 @@ adminRouter.get('/admin', async (req, res) => {
     memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     hostname: os.hostname(),
   };
-  res.render('admin/index', { title: 'Администрирование', stats, system });
-});
-
-/* ============================== НАСТРОЙКИ ================================ */
-
-adminRouter.get('/admin/settings', (req, res) => {
-  res.render('admin/settings', {
-    title: 'Настройки сайта',
-    groups: getSchemaGroups(),
-    values: getSettings(),
-    presets: THEME_PRESETS,
-    themes: getThemes(),
-    errors: [],
+  res.render('admin/index', {
+    title: 'Администрирование', stats, system, newestUsers, sections: SETTINGS_SECTIONS,
   });
 });
 
-adminRouter.post('/admin/settings', async (req, res) => {
-  /* Сохраняем только поля этой вкладки — настройки LDAP живут отдельно. */
-  const { errors } = await updateSettings(req.body, keysForTab('general'));
-  if (errors.length) {
-    /* При ошибке показываем форму с ВВЕДЁННЫМИ значениями, чтобы
-     * администратору не пришлось заполнять всё заново. */
-    return res.status(422).render('admin/settings', {
-      title: 'Настройки сайта',
-      groups: getSchemaGroups(),
-      values: { ...getSettings(), ...req.body },
-      presets: THEME_PRESETS,
-      themes: getThemes(),
-      errors,
-    });
-  }
-  req.flash('success', 'Настройки сохранены');
-  return res.redirect('/admin/settings');
-});
+/* ============================== НАСТРОЙКИ ================================
+ * Разделы настроек сайта. Ключ совпадает со свойством tab в схеме
+ * (src/services/settings.js): поле с tab: 'access' попадёт на страницу
+ * /admin/settings/access. Чтобы добавить раздел — впишите его сюда, в меню
+ * (views/partials/settings-nav.ejs) и укажите tab у нужных полей схемы.
+ * ========================================================================= */
+export const SETTINGS_SECTIONS = {
+  general: { title: 'Общие', icon: 'globe', description: 'Название сайта, логотип, приветствие на главной и объявления.' },
+  access: { title: 'Доступ и права', icon: 'lock', description: 'Кто может читать, регистрироваться и оставлять комментарии.' },
+  appearance: { title: 'Оформление', icon: 'droplet', description: 'Тема сайта, светлый и тёмный режим, цвета, шрифты и собственный CSS.' },
+};
 
+function renderSection(res, section, { values = getSettings(), errors = [], status = 200 } = {}) {
+  res.status(status).render('admin/settings', {
+    title: SETTINGS_SECTIONS[section].title,
+    section,
+    meta: SETTINGS_SECTIONS[section],
+    groups: getSchemaGroups(section),
+    values,
+    presets: THEME_PRESETS,
+    themes: getThemes(),
+    errors,
+  });
+}
+
+adminRouter.get('/admin/settings', (req, res) => res.redirect('/admin/settings/general'));
+
+/* Сброс группы объявлен РАНЬШЕ маршрута /admin/settings/:section, иначе
+ * адрес /admin/settings/reset был бы принят за раздел «reset». */
 adminRouter.post('/admin/settings/reset', async (req, res) => {
   const group = String(req.body.group ?? '');
   await resetSettings(group);
-  req.flash('success', `Раздел «${group}» сброшен к значениям по умолчанию`);
-  /* Возвращаемся на ту вкладку, откуда пришли («Настройки» или «LDAP»). */
+  req.flash('success', `Группа «${group}» сброшена к значениям по умолчанию`);
+  /* Возвращаемся на страницу, откуда пришли (раздел настроек или LDAP). */
   res.redirect(backUrl(req, '/admin/settings'));
+});
+
+adminRouter.get('/admin/settings/:section', (req, res, next) => {
+  if (!SETTINGS_SECTIONS[req.params.section]) return next(); /* → 404 */
+  return renderSection(res, req.params.section);
+});
+
+adminRouter.post('/admin/settings/:section', async (req, res, next) => {
+  const { section } = req.params;
+  if (!SETTINGS_SECTIONS[section]) return next();
+  /* Сохраняем только поля этого раздела: отсутствующий в форме чекбокс
+   * означает «выключено», и чужие разделы иначе сбросились бы. */
+  const { errors } = await updateSettings(req.body, keysForTab(section));
+  if (errors.length) {
+    /* При ошибке показываем форму с ВВЕДЁННЫМИ значениями. */
+    return renderSection(res, section, { values: { ...getSettings(), ...req.body }, errors, status: 422 });
+  }
+  req.flash('success', `Раздел «${SETTINGS_SECTIONS[section].title}» сохранён`);
+  return res.redirect(`/admin/settings/${section}`);
 });
 
 /* ================================ LDAP ===================================

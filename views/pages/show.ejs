@@ -140,7 +140,7 @@
 
       <% comments.forEach((c) => { %>
         <div class="comment" id="comment-<%= c.id %>">
-          <span class="avatar avatar-sm"><%= initials(c.author_name) %></span>
+          <span class="avatar avatar-sm" style="--avatar-h: <%= avatarHue(c.author_name) %>"><%= initials(c.author_name) %></span>
           <div class="comment-body">
             <div class="comment-meta">
               <b><%= authorName(c.author_name) %></b>

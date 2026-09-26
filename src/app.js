@@ -35,6 +35,7 @@ import { authRouter } from './routes/auth.js';
 import { homeRouter } from './routes/home.js';
 import { pagesRouter } from './routes/pages.js';
 import { profileRouter } from './routes/profile.js';
+import { settingsRouter } from './routes/settings.js';
 import { spacesRouter } from './routes/spaces.js';
 import { uploadsRouter } from './routes/uploads.js';
 
@@ -166,6 +167,7 @@ export function createApp({ sessionSecret }) {
   app.use(uploadsRouter);
   app.use(apiRouter);
   app.use(profileRouter);
+  app.use(settingsRouter);
   app.use(adminRouter);
 
   /* 10. Ничего не подошло → 404; любая ошибка → единый обработчик. */

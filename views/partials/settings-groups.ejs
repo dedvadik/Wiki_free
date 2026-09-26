@@ -2,11 +2,13 @@
   ============================================================================
   partials/settings-groups.ejs — поля настроек, построенные по схеме
   ----------------------------------------------------------------------------
-  Общий кусок для вкладок «Настройки» и «LDAP». Для каждого поля схемы
-  (src/services/settings.js) выбирается элемент ввода по его типу.
-  Кнопка «Сбросить раздел» каждой группы отправляет отдельную скрытую форму
-  reset-<номер> через атрибут form (вложенные формы в HTML запрещены) —
-  сами скрытые формы выводит вызывающий шаблон.
+  Общий кусок для разделов администрирования (Общие, Доступ, Оформление,
+  LDAP). Каждая группа схемы — отдельная карточка с заголовком; для каждого
+  поля (src/services/settings.js) выбирается элемент ввода по его типу,
+  флажки (bool) выглядят как переключатели iOS/macOS (класс .switch).
+  Кнопка «Сбросить к умолчаниям» каждой группы отправляет отдельную скрытую
+  форму reset-<номер> через атрибут form (вложенные формы в HTML
+  запрещены) — сами скрытые формы выводит вызывающий шаблон.
 
   Параметры:
     groups      — [{ name, fields }]
@@ -17,8 +19,8 @@
   ============================================================================
 %>
 <% groups.forEach((group, gi) => { %>
-  <fieldset class="card settings-group">
-    <legend><%= group.name %></legend>
+  <section class="card settings-card settings-group" aria-labelledby="sg-<%= gi %>">
+    <h2 class="settings-card-title" id="sg-<%= gi %>"><%= group.name %></h2>
 
     <%# Для группы с цветами — быстрые цветовые пресеты (поверх темы).
         Пресет с пустыми значениями («Цвета темы») очищает поля. %>
@@ -39,9 +41,17 @@
     <% } %>
 
     <% group.fields.forEach((f) => { const v = values[f.key]; %>
-      <div class="field <%= f.type === 'bool' ? 'field-check' : '' %>">
+      <div class="field <%= f.type === 'bool' ? 'field-switch' : '' %>">
         <% if (f.type === 'bool') { %>
-          <label><input type="checkbox" name="<%= f.key %>" <%= v === true || v === 'on' ? 'checked' : '' %>> <%= f.label %></label>
+          <%# Переключатель: подпись и подсказка слева, «тумблер» справа.
+              Весь ряд кликабелен (это <label>). %>
+          <label class="switch-row">
+            <span class="switch-text">
+              <span><%= f.label %></span>
+              <% if (f.help) { %><small class="help"><%= f.help %></small><% } %>
+            </span>
+            <input type="checkbox" class="switch" name="<%= f.key %>" <%= v === true || v === 'on' ? 'checked' : '' %>>
+          </label>
 
         <% } else { %>
           <label for="s-<%= f.key %>"><%= f.label %></label>
@@ -95,12 +105,13 @@
           <% } %>
         <% } %>
 
-        <% if (f.help) { %><p class="help"><%= f.help %></p><% } %>
+        <%# У переключателей подсказка уже выведена внутри ряда. %>
+        <% if (f.help && f.type !== 'bool') { %><p class="help"><%= f.help %></p><% } %>
       </div>
     <% }) %>
 
     <div class="settings-group-actions">
-      <button type="submit" class="link-btn" form="reset-<%= gi %>">Сбросить раздел к умолчаниям</button>
+      <button type="submit" class="link-btn" form="reset-<%= gi %>">Сбросить к умолчаниям</button>
     </div>
-  </fieldset>
+  </section>
 <% }) %>

@@ -9,7 +9,8 @@
      4. выезжающая боковая панель на мобильных;
      5. кнопка «Копировать» у блоков кода;
      6. подсветка текущего раздела в оглавлении при прокрутке;
-     7. печать страницы.
+     7. печать страницы;
+     8. настройки этого браузера на странице «Настройки → Оформление».
    ============================================================================ */
 (function () {
   'use strict';
@@ -127,6 +128,38 @@
     link.addEventListener('click', (event) => {
       event.preventDefault();
       window.print();
+    });
+  });
+
+  /* ---------------------------------------------------------------------
+     8. Настройки этого браузера («Настройки → Оформление»): радиокнопки с
+        data-pref="color-mode" | "editor-mode". Значение хранится в
+        localStorage и применяется сразу, без отправки формы:
+          color-mode  — light | dark | auto (его читает theme-init.js);
+          editor-mode — edit | split | preview (его читает editor.js).
+     --------------------------------------------------------------------- */
+  const PREF_DEFAULTS = {
+    'color-mode': () => document.documentElement.dataset.defaultMode || 'light',
+    'editor-mode': () => 'split',
+  };
+  const readPref = (key) => {
+    try { return localStorage.getItem(key); } catch { return null; }
+  };
+
+  document.querySelectorAll('input[data-pref]').forEach((input) => {
+    const key = input.dataset.pref;
+    /* Отмечаем текущее значение (сервер его не знает — оно в браузере). */
+    input.checked = input.value === (readPref(key) || PREF_DEFAULTS[key]?.());
+
+    input.addEventListener('change', () => {
+      if (!input.checked) return;
+      try { localStorage.setItem(key, input.value); } catch { /* приватный режим */ }
+      if (key === 'color-mode') {
+        const mode = input.value === 'auto'
+          ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+          : input.value;
+        document.documentElement.dataset.mode = mode;
+      }
     });
   });
 })();

@@ -1,43 +1,95 @@
 <%#
   ============================================================================
-  admin/index.ejs — обзор: статистика контента и сведения о системе
-  Переменные: stats (счётчики из БД), system (версия Node, архитектура и т.д.)
+  admin/index.ejs — «Администрирование → Обзор»
+  ----------------------------------------------------------------------------
+  Плитки статистики, быстрые переходы к разделам настроек, последние
+  зарегистрированные пользователи и сведения о системе (версия Node,
+  архитектура — удобно проверить, что запущен образ нужной платформы).
+  Переменные: stats, system, newestUsers, sections (разделы настроек)
   ============================================================================
 %>
 <%- include('/partials/header', { title: 'Администрирование' }) %>
 
-<div class="container">
-  <h1>Администрирование</h1>
-  <%- include('/partials/admin-nav') %>
+<div class="settings-shell">
+  <%- include('/partials/settings-nav', { area: 'admin', active: 'overview' }) %>
 
-  <div class="stat-grid">
-    <% [
-         ['Пользователи', stats.users, '/admin/users'],
-         ['Пространства', stats.spaces, '/spaces'],
-         ['Страницы', stats.pages, null],
-         ['Версии', stats.versions, null],
-         ['Комментарии', stats.comments, null],
-         ['Вложения', `${stats.attachments} · ${fileSize(stats.attachments_size)}`, null],
-       ].forEach(([label, value, href]) => { %>
-      <div class="stat card">
-        <div class="stat-value"><% if (href) { %><a href="<%= href %>"><%= value %></a><% } else { %><%= value %><% } %></div>
-        <div class="stat-label"><%= label %></div>
+  <section class="settings-main">
+    <header class="settings-header">
+      <h1>Обзор</h1>
+      <p>Состояние базы знаний «<%= site.site_name %>».</p>
+    </header>
+
+    <%# ------------------------ Плитки статистики ------------------------- %>
+    <div class="stat-tiles">
+      <% [
+           ['users', '#007aff', stats.users, 'Пользователи', `активных за 30 дней: ${stats.active_users}`, '/admin/users'],
+           ['folder', '#ff9500', stats.spaces, 'Пространства', '', '/spaces'],
+           ['file-text', '#34c759', stats.pages, 'Страницы', `версий всего: ${stats.versions}`, null],
+           ['message', '#5856d6', stats.comments, 'Комментарии', '', null],
+           ['paperclip', '#ff2d55', stats.attachments, 'Вложения', fileSize(stats.attachments_size), null],
+           ['database', '#30b0c7', stats.db_size, 'База данных', `PostgreSQL ${stats.pg_version}`, null],
+         ].forEach(([iconName, tile, value, label, hint, href]) => { %>
+        <%- href ? `<a class="card stat-tile" href="${href}">` : '<div class="card stat-tile">' %>
+          <span class="settings-tile" style="--tile: <%= tile %>"><%- icon(iconName) %></span>
+          <div>
+            <div class="stat-tile-value"><%= value %></div>
+            <div class="stat-tile-label"><%= label %></div>
+            <% if (hint) { %><div class="stat-tile-hint"><%= hint %></div><% } %>
+          </div>
+        <%- href ? '</a>' : '</div>' %>
+      <% }) %>
+    </div>
+
+    <%# ---------------------- Быстрый переход к разделам ------------------- %>
+    <div class="card settings-card">
+      <h2 class="settings-card-title">Настройки сайта</h2>
+      <div class="settings-links">
+        <% Object.entries(sections).forEach(([key, s]) => { %>
+          <a class="settings-row settings-row-link" href="/admin/settings/<%= key %>">
+            <span class="settings-tile" style="--tile: <%= { general: '#8e8e93', access: '#ff9500', appearance: '#af52de' }[key] %>"><%- icon(s.icon) %></span>
+            <span class="grow"><strong><%= s.title %></strong><span class="muted small"><%= s.description %></span></span>
+            <%- icon('chevron-right', 'muted') %>
+          </a>
+        <% }) %>
+        <a class="settings-row settings-row-link" href="/admin/ldap">
+          <span class="settings-tile" style="--tile: #30b0c7"><%- icon('server') %></span>
+          <span class="grow"><strong>LDAP / Active Directory</strong>
+            <span class="muted small"><%= site.ldap_enabled ? 'Вход через каталог включён' : 'Вход через корпоративный каталог выключен' %><% if (stats.ldap_users) { %> · <%= plural(stats.ldap_users, 'пользователь', 'пользователя', 'пользователей') %> из каталога<% } %></span>
+          </span>
+          <%- icon('chevron-right', 'muted') %>
+        </a>
       </div>
-    <% }) %>
-  </div>
+    </div>
 
-  <div class="card">
-    <h2 class="card-title">Система</h2>
-    <table class="table kv">
-      <tr><th>Node.js</th><td><%= system.node %></td></tr>
-      <tr><th>Платформа / архитектура</th><td><%= system.platform %></td></tr>
-      <tr><th>Контейнер (hostname)</th><td><%= system.hostname %></td></tr>
-      <tr><th>Работает</th><td><%= Math.floor(system.uptime / 3600) %> ч <%= Math.floor(system.uptime % 3600 / 60) %> мин</td></tr>
-      <tr><th>Память процесса</th><td><%= system.memoryMb %> МБ</td></tr>
-      <tr><th>Размер базы данных</th><td><%= stats.db_size %></td></tr>
-      <tr><th>PostgreSQL</th><td class="small"><%= stats.pg_version %></td></tr>
-    </table>
-  </div>
+    <div class="profile-columns">
+      <%# ---------------------- Новые пользователи ------------------------- %>
+      <div class="card settings-card">
+        <h2 class="settings-card-title">Новые пользователи</h2>
+        <div class="settings-links">
+          <% newestUsers.forEach((u) => { %>
+            <a class="settings-row settings-row-link" href="/admin/users/<%= u.id %>">
+              <span class="avatar avatar-sm" style="--avatar-h: <%= avatarHue(u.display_name) %>"><%= initials(u.display_name) %></span>
+              <span class="grow"><strong><%= u.display_name %></strong>
+                <span class="muted small">@<%= u.username %> · <%= roleNames[u.role] %><% if (u.auth_source === 'ldap') { %> · LDAP<% } %></span></span>
+              <span class="muted small nowrap"><%= timeAgo(u.created_at) %></span>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+
+      <%# ----------------------------- Система ----------------------------- %>
+      <div class="card settings-card">
+        <h2 class="settings-card-title">Система</h2>
+        <dl class="settings-list">
+          <div><dt><%- icon('cpu') %> Платформа</dt><dd><%= system.platform %></dd></div>
+          <div><dt><%- icon('server') %> Node.js</dt><dd><%= system.node %></dd></div>
+          <div><dt><%- icon('monitor') %> Контейнер</dt><dd><code><%= system.hostname %></code></dd></div>
+          <div><dt><%- icon('clock') %> Работает</dt><dd><%= Math.floor(system.uptime / 3600) %> ч <%= Math.floor(system.uptime % 3600 / 60) %> мин</dd></div>
+          <div><dt><%- icon('bar-chart') %> Память</dt><dd><%= system.memoryMb %> МБ</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
 </div>
 
 <%- include('/partials/footer') %>

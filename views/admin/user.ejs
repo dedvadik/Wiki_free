@@ -1,6 +1,7 @@
 <%#
   ============================================================================
-  admin/user.ejs — карточка пользователя: роль, блокировка, сброс пароля
+  admin/user.ejs — карточка пользователя: роль, блокировка, пароль, удаление
+  ----------------------------------------------------------------------------
   Для LDAP-пользователей: показывается DN, поле пароля скрыто (пароль
   живёт в каталоге), а если роль управляется группами — предупреждение,
   что ручная смена роли будет перезаписана при следующем входе.
@@ -11,89 +12,103 @@
 %>
 <%- include('/partials/header', { title: `Пользователь ${user.username}` }) %>
 
-<div class="narrow">
-  <nav class="breadcrumbs"><a href="/admin/users">Пользователи</a><span class="sep">›</span><span><%= user.username %></span></nav>
+<div class="settings-shell">
+  <%- include('/partials/settings-nav', { area: 'admin', active: 'users' }) %>
 
-  <div class="profile-head">
-    <span class="avatar avatar-lg"><%= initials(user.display_name) %></span>
-    <div>
-      <h1><%= user.display_name %></h1>
-      <div class="muted">@<%= user.username %> · <%= user.email %></div>
-      <div class="muted small">Зарегистрирован <%= formatDate(user.created_at) %>,
-        последний вход: <%= user.last_login_at ? formatDateTime(user.last_login_at) : 'никогда' %></div>
-      <% if (user.auth_source === 'ldap') { %>
-        <div class="small"><span class="badge">LDAP</span> <code class="ldap-dn"><%= user.ldap_dn %></code></div>
-      <% } %>
-    </div>
-  </div>
+  <section class="settings-main">
+    <nav class="breadcrumbs"><a href="/admin/users">Пользователи</a><span class="sep">›</span><span><%= user.username %></span></nav>
 
-  <%- include('/partials/errors') %>
-
-  <form method="post" action="/admin/users/<%= user.id %>" class="form card">
-    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
-
-    <div class="field">
-      <label for="role">Роль</label>
-      <select id="role" name="role">
-        <% roles.forEach((r) => { %><option value="<%= r %>" <%= user.role === r ? 'selected' : '' %>><%= roleNames[r] %></option><% }) %>
-      </select>
-      <p class="help">Читатель — просмотр и комментарии · Редактор — создание и правка страниц · Администратор — всё, включая настройки.</p>
-      <% if (roleManaged) { %>
-        <p class="help warn">⚠ Роль этого пользователя определяется группами LDAP и будет пересчитана при его следующем входе.
-          Чтобы изменить её надолго, измените членство в группах каталога.</p>
-      <% } %>
-    </div>
-
-    <div class="field field-check">
-      <label><input type="checkbox" name="is_active" <%= user.is_active ? 'checked' : '' %>> Учётная запись активна</label>
-      <p class="help">Снимите галочку, чтобы заблокировать вход. Все текущие сеансы пользователя будут завершены.</p>
-    </div>
-
-    <% if (user.auth_source === 'local') { %>
-      <div class="field">
-        <label for="new_password">Новый пароль</label>
-        <input id="new_password" type="password" name="new_password" minlength="8" autocomplete="new-password" placeholder="Оставьте пустым, чтобы не менять">
+    <%# --------------------------- Визитка --------------------------------- %>
+    <div class="card settings-card user-card">
+      <span class="avatar avatar-lg" style="--avatar-h: <%= avatarHue(user.display_name) %>"><%= initials(user.display_name) %></span>
+      <div class="grow">
+        <h1><%= user.display_name %></h1>
+        <div class="profile-tags">
+          <span class="muted">@<%= user.username %> · <%= user.email %></span>
+          <span class="role role-<%= user.role %>"><%= roleNames[user.role] %></span>
+          <% if (user.auth_source === 'ldap') { %><span class="badge">LDAP</span><% } %>
+          <% if (!user.is_active) { %><span class="badge badge-danger">заблокирован</span><% } %>
+        </div>
+        <div class="muted small">Зарегистрирован <%= formatDate(user.created_at) %> ·
+          последний вход: <%= user.last_login_at ? formatDateTime(user.last_login_at) : 'никогда' %></div>
+        <% if (user.auth_source === 'ldap') { %><div class="small"><code class="ldap-dn"><%= user.ldap_dn %></code></div><% } %>
       </div>
-    <% } else { %>
-      <p class="help">Пароль этого пользователя хранится в каталоге LDAP и меняется там же.</p>
-    <% } %>
-
-    <div class="form-actions">
-      <button class="btn btn-primary" type="submit">Сохранить</button>
-      <a class="btn" href="/admin/users">Назад</a>
     </div>
-  </form>
 
-  <%# ------------------------- Опасная зона: удаление -------------------- %>
-  <% if (isSelf) { %>
-    <p class="muted small">Собственную учётную запись удалить нельзя.</p>
-  <% } else { %>
-    <form method="post" action="/admin/users/<%= user.id %>/delete" class="card danger-zone"
-          data-confirm="Удалить пользователя <%= user.username %>? Это действие нельзя отменить.">
+    <%- include('/partials/errors') %>
+
+    <form method="post" action="/admin/users/<%= user.id %>" class="form card settings-card">
       <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
-      <h2>Удаление пользователя</h2>
-      <p>Учётная запись будет удалена <b>безвозвратно</b>, все её сеансы завершены.</p>
-      <p class="small">
-        Созданный пользователем контент <b>останется</b> —
-        <%= plural(activity.pages, 'страница', 'страницы', 'страниц') %>,
-        <%= plural(activity.versions, 'правка', 'правки', 'правок') %>,
-        <%= plural(activity.comments, 'комментарий', 'комментария', 'комментариев') %>,
-        <%= plural(activity.attachments, 'вложение', 'вложения', 'вложений') %>;
-        автором будет указан «удалённый пользователь».
-      </p>
-      <% if (user.auth_source === 'ldap') { %>
-        <%# Важный нюанс: удаление НЕ мешает LDAP-пользователю войти снова. %>
-        <p class="help warn">⚠ Это пользователь из LDAP: при следующем входе через каталог учётная запись будет
-          создана заново (уже активной). Чтобы запретить вход, лучше <b>заблокируйте</b> его выше
-          или удалите из каталога / группы доступа.</p>
+      <h2 class="settings-card-title">Права и доступ</h2>
+
+      <div class="field">
+        <label for="role">Роль</label>
+        <select id="role" name="role">
+          <% roles.forEach((r) => { %><option value="<%= r %>" <%= user.role === r ? 'selected' : '' %>><%= roleNames[r] %></option><% }) %>
+        </select>
+        <p class="help">Читатель — просмотр и комментарии · Редактор — создание и правка страниц · Администратор — всё, включая настройки.</p>
+        <% if (roleManaged) { %>
+          <p class="help warn">⚠ Роль этого пользователя определяется группами LDAP и будет пересчитана при его следующем входе.
+            Чтобы изменить её надолго, измените членство в группах каталога.</p>
+        <% } %>
+      </div>
+
+      <div class="field field-switch">
+        <label class="switch-row">
+          <span class="switch-text">
+            <span>Учётная запись активна</span>
+            <small class="help">Выключите, чтобы заблокировать вход. Все текущие сеансы пользователя будут завершены.</small>
+          </span>
+          <input type="checkbox" class="switch" name="is_active" <%= user.is_active ? 'checked' : '' %>>
+        </label>
+      </div>
+
+      <% if (user.auth_source === 'local') { %>
+        <div class="field">
+          <label for="new_password">Новый пароль</label>
+          <input id="new_password" type="password" name="new_password" minlength="8" autocomplete="new-password" placeholder="Оставьте пустым, чтобы не менять">
+        </div>
+      <% } else { %>
+        <p class="help">Пароль этого пользователя хранится в каталоге LDAP и меняется там же.</p>
       <% } %>
-      <div class="field-row">
-        <input name="confirm_username" placeholder="Введите логин «<%= user.username %>» для подтверждения"
-               autocomplete="off" required class="grow">
-        <button class="btn btn-danger" type="submit">Удалить пользователя</button>
+
+      <div class="settings-card-actions">
+        <a class="btn" href="/admin/users">Назад</a>
+        <button class="btn btn-primary" type="submit">Сохранить</button>
       </div>
     </form>
-  <% } %>
+
+    <%# ------------------------- Опасная зона: удаление -------------------- %>
+    <% if (isSelf) { %>
+      <p class="muted small">Собственную учётную запись удалить нельзя.</p>
+    <% } else { %>
+      <form method="post" action="/admin/users/<%= user.id %>/delete" class="card settings-card danger-zone"
+            data-confirm="Удалить пользователя <%= user.username %>? Это действие нельзя отменить.">
+        <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+        <h2 class="settings-card-title">Удаление пользователя</h2>
+        <p>Учётная запись будет удалена <b>безвозвратно</b>, все её сеансы завершены.</p>
+        <p class="small">
+          Созданный пользователем контент <b>останется</b> —
+          <%= plural(activity.pages, 'страница', 'страницы', 'страниц') %>,
+          <%= plural(activity.versions, 'правка', 'правки', 'правок') %>,
+          <%= plural(activity.comments, 'комментарий', 'комментария', 'комментариев') %>,
+          <%= plural(activity.attachments, 'вложение', 'вложения', 'вложений') %>;
+          автором будет указан «удалённый пользователь».
+        </p>
+        <% if (user.auth_source === 'ldap') { %>
+          <%# Важный нюанс: удаление НЕ мешает LDAP-пользователю войти снова. %>
+          <p class="help warn">⚠ Это пользователь из LDAP: при следующем входе через каталог учётная запись будет
+            создана заново (уже активной). Чтобы запретить вход, лучше <b>заблокируйте</b> его выше
+            или удалите из каталога / группы доступа.</p>
+        <% } %>
+        <div class="field-row">
+          <input name="confirm_username" placeholder="Введите логин «<%= user.username %>» для подтверждения"
+                 autocomplete="off" required class="grow">
+          <button class="btn btn-danger" type="submit">Удалить пользователя</button>
+        </div>
+      </form>
+    <% } %>
+  </section>
 </div>
 
 <%- include('/partials/footer') %>

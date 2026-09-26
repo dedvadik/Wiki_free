@@ -67,8 +67,10 @@ export const THEME_PRESETS = [
  * СХЕМА НАСТРОЕК.
  * Поля объекта:
  *   key      — имя настройки (в шаблонах: site.key)
- *   tab      — вкладка админки: 'general' (по умолчанию, «Настройки») или
- *              'ldap' (вкладка «LDAP»). Каждая вкладка сохраняет только свои поля.
+ *   tab      — раздел администрирования, на странице которого показано поле:
+ *              'general' (по умолчанию, «Общие»), 'access' («Доступ и права»),
+ *              'appearance' («Оформление»), 'ldap' («LDAP»). Каждый раздел —
+ *              отдельная страница и сохраняет только свои поля.
  *   group    — заголовок блока на странице админки
  *   label    — подпись поля
  *   type     — text | textarea | markdown | code | url | bool | color | select
@@ -98,21 +100,21 @@ export const SETTINGS_SCHEMA = [
   { group: 'Общие', key: 'footer_text', label: 'Текст в подвале', type: 'text', default: 'Работает на WikiSpace' },
 
   /* ---- Доступ ---- */
-  { group: 'Доступ и права', key: 'require_login', label: 'Закрытая вики: читать могут только вошедшие пользователи', type: 'bool', default: false },
-  { group: 'Доступ и права', key: 'allow_registration', label: 'Разрешить самостоятельную регистрацию', type: 'bool', default: true,
+  { tab: 'access', group: 'Доступ и права', key: 'require_login', label: 'Закрытая вики: читать могут только вошедшие пользователи', type: 'bool', default: false },
+  { tab: 'access', group: 'Доступ и права', key: 'allow_registration', label: 'Разрешить самостоятельную регистрацию', type: 'bool', default: true,
     help: 'Если выключено, новых пользователей добавляет администратор.' },
-  { group: 'Доступ и права', key: 'default_role', label: 'Роль новых пользователей', type: 'select', default: 'editor',
+  { tab: 'access', group: 'Доступ и права', key: 'default_role', label: 'Роль новых пользователей', type: 'select', default: 'editor',
     options: [['viewer', 'Читатель — только просмотр и комментарии'], ['editor', 'Редактор — может создавать и править страницы']] },
-  { group: 'Доступ и права', key: 'allow_comments', label: 'Разрешить комментарии к страницам', type: 'bool', default: true },
+  { tab: 'access', group: 'Доступ и права', key: 'allow_comments', label: 'Разрешить комментарии к страницам', type: 'bool', default: true },
 
   /* ---- Тема оформления ----
    * Список тем берётся из src/services/themes.js (папки public/themes и
    * custom/public/themes), поэтому у поля свой тип 'theme'. */
-  { group: 'Тема оформления', key: 'theme', label: 'Тема сайта по умолчанию', type: 'theme', default: 'classic' },
-  { group: 'Тема оформления', key: 'allow_user_themes', label: 'Пользователи могут выбрать свою тему в профиле', type: 'bool', default: true,
+  { tab: 'appearance', group: 'Тема оформления', key: 'theme', label: 'Тема сайта по умолчанию', type: 'theme', default: 'classic' },
+  { tab: 'appearance', group: 'Тема оформления', key: 'allow_user_themes', label: 'Пользователи могут выбрать свою тему в профиле', type: 'bool', default: true,
     help: 'Гости и пользователи, не выбравшие тему, видят тему сайта по умолчанию.' },
   /* Ключ исторически называется default_theme, но хранит РЕЖИМ (светлый/тёмный). */
-  { group: 'Тема оформления', key: 'default_theme', label: 'Цветовой режим по умолчанию', type: 'select', default: 'light',
+  { tab: 'appearance', group: 'Тема оформления', key: 'default_theme', label: 'Цветовой режим по умолчанию', type: 'select', default: 'light',
     options: [['light', 'Светлый'], ['dark', 'Тёмный'], ['auto', 'Как в системе пользователя']],
     help: 'Каждый пользователь может переключить режим кнопкой ◐ в шапке. Все темы поддерживают оба режима.' },
 
@@ -120,19 +122,19 @@ export const SETTINGS_SCHEMA = [
    * Поля с optional: true можно оставить пустыми — тогда действует значение
    * выбранной темы. Заполненное значение применяется поверх ЛЮБОЙ темы
    * (например, фирменный цвет компании). */
-  { group: 'Цвета и шрифты', key: 'primary_color', label: 'Основной цвет (ссылки, кнопки)', type: 'color', optional: true, default: '',
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'primary_color', label: 'Основной цвет (ссылки, кнопки)', type: 'color', optional: true, default: '',
     help: 'Пусто — цвет выбранной темы.' },
-  { group: 'Цвета и шрифты', key: 'header_bg', label: 'Фон шапки', type: 'color', optional: true, default: '' },
-  { group: 'Цвета и шрифты', key: 'header_text', label: 'Цвет текста шапки', type: 'color', optional: true, default: '' },
-  { group: 'Цвета и шрифты', key: 'font_family', label: 'Шрифт', type: 'select', default: 'theme',
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'header_bg', label: 'Фон шапки', type: 'color', optional: true, default: '' },
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'header_text', label: 'Цвет текста шапки', type: 'color', optional: true, default: '' },
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'font_family', label: 'Шрифт', type: 'select', default: 'theme',
     options: [['theme', 'Как в теме'], ['system', 'Системный'], ['apple', 'Apple (SF Pro)'], ['humanist', 'Гуманистический'], ['serif', 'С засечками'], ['mono', 'Моноширинный']] },
-  { group: 'Цвета и шрифты', key: 'font_size', label: 'Размер шрифта статей (px)', type: 'number', default: 16, min: 12, max: 22 },
-  { group: 'Цвета и шрифты', key: 'content_width', label: 'Ширина текста статьи', type: 'select', default: 'normal',
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'font_size', label: 'Размер шрифта статей (px)', type: 'number', default: 16, min: 12, max: 22 },
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'content_width', label: 'Ширина текста статьи', type: 'select', default: 'normal',
     options: [['narrow', 'Узкая (760px)'], ['normal', 'Обычная (960px)'], ['wide', 'Широкая (1200px)'], ['full', 'Во всю ширину']] },
-  { group: 'Цвета и шрифты', key: 'sidebar_width', label: 'Ширина боковой панели (px)', type: 'number', default: 280, min: 200, max: 480 },
-  { group: 'Цвета и шрифты', key: 'border_radius', label: 'Скругление углов (px)', type: 'number', optional: true, default: '', min: 0, max: 24,
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'sidebar_width', label: 'Ширина боковой панели (px)', type: 'number', default: 280, min: 200, max: 480 },
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'border_radius', label: 'Скругление углов (px)', type: 'number', optional: true, default: '', min: 0, max: 24,
     help: 'Пусто — как в теме.' },
-  { group: 'Цвета и шрифты', key: 'custom_css', label: 'Собственный CSS', type: 'code', default: '',
+  { tab: 'appearance', group: 'Цвета и шрифты', key: 'custom_css', label: 'Собственный CSS', type: 'code', default: '',
     help: 'Подключается после всех стилей и тем. Можно адресовать конкретную тему: :root[data-ui-theme="icloud"] .topbar { … }' },
 
   /* ---- LDAP / Active Directory (отдельная вкладка админки) ----
