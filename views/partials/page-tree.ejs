@@ -1,0 +1,31 @@
+<%#
+  ============================================================================
+  partials/page-tree.ejs — РЕКУРСИВНОЕ дерево страниц пространства
+  ----------------------------------------------------------------------------
+  Шаблон вызывает сам себя для дочерних страниц. Раскрытие/сворачивание
+  веток сделано на нативном <details>/<summary> — без JavaScript.
+  Параметры:
+    nodes         — массив узлов [{ id, title, children: [...] }]
+    currentPageId — id открытой страницы (подсвечивается)
+    openIds       — id страниц, ветки которых нужно раскрыть (путь к текущей)
+  currentPageId и openIds автоматически «наследуются» вложенными вызовами.
+  ============================================================================
+%>
+<ul class="tree">
+  <% nodes.forEach((node) => {
+       const isActive = node.id === locals.currentPageId;
+       const isOpen = (locals.openIds || []).includes(node.id); %>
+    <li>
+      <% if (node.children.length) { %>
+        <details <%= isOpen ? 'open' : '' %>>
+          <summary>
+            <a class="tree-link <%= isActive ? 'active' : '' %>" href="<%= pageUrl(node) %>"><%= node.title %></a>
+          </summary>
+          <%- include('/partials/page-tree', { nodes: node.children }) %>
+        </details>
+      <% } else { %>
+        <a class="tree-link leaf <%= isActive ? 'active' : '' %>" href="<%= pageUrl(node) %>"><%= node.title %></a>
+      <% } %>
+    </li>
+  <% }) %>
+</ul>

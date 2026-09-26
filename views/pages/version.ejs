@@ -1,0 +1,47 @@
+<%#
+  ============================================================================
+  pages/version.ejs — просмотр СТАРОЙ версии страницы
+  Вверху — жёлтая плашка, чтобы было очевидно, что это не актуальный текст.
+  Переменные: page, version, contentHtml
+  ============================================================================
+%>
+<%- include('/partials/header', { title: `${version.title} (версия ${version.version})` }) %>
+
+<div class="container">
+  <nav class="breadcrumbs">
+    <a href="/spaces/<%= page.space_key %>"><%= page.space_icon %> <%= page.space_name %></a>
+    <span class="sep">›</span><a href="<%= pageUrl(page) %>"><%= page.title %></a>
+    <span class="sep">›</span><a href="/pages/<%= page.id %>/history">История</a>
+    <span class="sep">›</span><span>v<%= version.version %></span>
+  </nav>
+
+  <div class="version-banner">
+    <div>
+      <% if (version.version === page.version) { %>
+        Это <b>текущая</b> версия страницы.
+      <% } else { %>
+        Вы просматриваете <b>версию <%= version.version %></b> из <%= page.version %>
+        от <%= formatDateTime(version.created_at) %> (<%= authorName(version.author_name) %>).
+      <% } %>
+      <% if (version.change_note) { %><div class="small">«<%= version.change_note %>»</div><% } %>
+    </div>
+    <div class="page-actions">
+      <a class="btn btn-sm" href="<%= pageUrl(page) %>">К текущей версии</a>
+      <% if (version.version > 1) { %>
+        <a class="btn btn-sm" href="/pages/<%= page.id %>/diff?from=<%= version.version - 1 %>&to=<%= version.version %>">Что изменилось</a>
+      <% } %>
+      <% if (version.version !== page.version && can('editor')) { %>
+        <form method="post" action="/pages/<%= page.id %>/versions/<%= version.version %>/restore" class="inline"
+              data-confirm="Восстановить эту версию?">
+          <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+          <button class="btn btn-sm btn-primary" type="submit">Восстановить</button>
+        </form>
+      <% } %>
+    </div>
+  </div>
+
+  <h1 class="page-title"><%= version.title %></h1>
+  <div class="markdown-body page-content"><%- contentHtml %></div>
+</div>
+
+<%- include('/partials/footer') %>

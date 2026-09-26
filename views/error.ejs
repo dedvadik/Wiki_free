@@ -1,0 +1,16 @@
+<%#
+  error.ejs — страница ошибки (404, 403, 500 и т.д.).
+  Переменные: status (HTTP-код), message (текст для пользователя)
+%>
+<%- include('/partials/header', { title: `Ошибка ${status}` }) %>
+
+<div class="empty-state">
+  <div class="error-code"><%= status %></div>
+  <p class="error-message"><%= message %></p>
+  <div class="page-actions center">
+    <a class="btn btn-primary" href="/">На главную</a>
+    <% if (status === 401 || status === 403) { if (!currentUser) { %><a class="btn" href="/login">Войти</a><% } } %>
+  </div>
+</div>
+
+<%- include('/partials/footer') %>

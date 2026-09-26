@@ -1,0 +1,33 @@
+{
+  "name": "wikispace",
+  "version": "1.0.0",
+  "description": "Self-hosted база знаний в стиле Confluence: пространства, иерархия страниц, версии, поиск, авторизация и гибкая кастомизация",
+  "private": true,
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch --env-file=.env src/server.js",
+    "migrate": "node src/db/migrate.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-pg-simple": "^10.0.0",
+    "diff": "^7.0.0",
+    "ejs": "^3.1.10",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "helmet": "^8.1.0",
+    "highlight.js": "^11.11.1",
+    "ldapts": "^9.2.0",
+    "marked": "^15.0.12",
+    "marked-highlight": "^2.2.1",
+    "multer": "^2.0.2",
+    "pg": "^8.16.0",
+    "sanitize-html": "^2.17.0"
+  }
+}

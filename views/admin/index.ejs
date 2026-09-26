@@ -1,0 +1,43 @@
+<%#
+  ============================================================================
+  admin/index.ejs — обзор: статистика контента и сведения о системе
+  Переменные: stats (счётчики из БД), system (версия Node, архитектура и т.д.)
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'Администрирование' }) %>
+
+<div class="container">
+  <h1>Администрирование</h1>
+  <%- include('/partials/admin-nav') %>
+
+  <div class="stat-grid">
+    <% [
+         ['Пользователи', stats.users, '/admin/users'],
+         ['Пространства', stats.spaces, '/spaces'],
+         ['Страницы', stats.pages, null],
+         ['Версии', stats.versions, null],
+         ['Комментарии', stats.comments, null],
+         ['Вложения', `${stats.attachments} · ${fileSize(stats.attachments_size)}`, null],
+       ].forEach(([label, value, href]) => { %>
+      <div class="stat card">
+        <div class="stat-value"><% if (href) { %><a href="<%= href %>"><%= value %></a><% } else { %><%= value %><% } %></div>
+        <div class="stat-label"><%= label %></div>
+      </div>
+    <% }) %>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">Система</h2>
+    <table class="table kv">
+      <tr><th>Node.js</th><td><%= system.node %></td></tr>
+      <tr><th>Платформа / архитектура</th><td><%= system.platform %></td></tr>
+      <tr><th>Контейнер (hostname)</th><td><%= system.hostname %></td></tr>
+      <tr><th>Работает</th><td><%= Math.floor(system.uptime / 3600) %> ч <%= Math.floor(system.uptime % 3600 / 60) %> мин</td></tr>
+      <tr><th>Память процесса</th><td><%= system.memoryMb %> МБ</td></tr>
+      <tr><th>Размер базы данных</th><td><%= stats.db_size %></td></tr>
+      <tr><th>PostgreSQL</th><td class="small"><%= stats.pg_version %></td></tr>
+    </table>
+  </div>
+</div>
+
+<%- include('/partials/footer') %>

@@ -1,0 +1,70 @@
+<%#
+  ============================================================================
+  admin/users.ejs — список пользователей и форма добавления нового
+  Переменные: users, roles, values (данные формы при ошибке), errors
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'Пользователи' }) %>
+
+<div class="container">
+  <h1>Пользователи</h1>
+  <%- include('/partials/admin-nav') %>
+
+  <div class="table-wrap card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Пользователь</th>
+          <th>Email</th>
+          <th>Роль</th>
+          <th>Статус</th>
+          <th class="right">Правок</th>
+          <th>Последний вход</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% users.forEach((u) => { %>
+          <tr class="<%= u.is_active ? '' : 'row-disabled' %>">
+            <td>
+              <span class="avatar avatar-sm"><%= initials(u.display_name) %></span>
+              <b><%= u.display_name %></b> <span class="muted small">@<%= u.username %></span>
+              <% if (u.auth_source === 'ldap') { %><span class="badge" title="Учётная запись из каталога LDAP">LDAP</span><% } %>
+            </td>
+            <td class="small"><%= u.email %></td>
+            <td><span class="role role-<%= u.role %>"><%= roleNames[u.role] %></span></td>
+            <td><%= u.is_active ? 'активен' : '🚫 заблокирован' %></td>
+            <td class="right"><%= u.edits %></td>
+            <td class="small muted nowrap"><%= u.last_login_at ? timeAgo(u.last_login_at) : 'никогда' %></td>
+            <td class="right"><a href="/admin/users/<%= u.id %>">изменить</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Добавить пользователя</h2>
+  <%- include('/partials/errors') %>
+  <form method="post" action="/admin/users" class="form card">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+    <div class="field-row">
+      <div class="field grow"><label for="nu-name">Имя</label>
+        <input id="nu-name" name="display_name" value="<%= values.displayName || '' %>" required maxlength="100"></div>
+      <div class="field grow"><label for="nu-login">Логин</label>
+        <input id="nu-login" name="username" value="<%= values.username || '' %>" required pattern="[a-zA-Z0-9_.\-]{3,50}"></div>
+    </div>
+    <div class="field-row">
+      <div class="field grow"><label for="nu-email">Email</label>
+        <input id="nu-email" type="email" name="email" value="<%= values.email || '' %>" required></div>
+      <div class="field grow"><label for="nu-pass">Пароль</label>
+        <input id="nu-pass" type="password" name="password" required minlength="8" autocomplete="new-password"></div>
+      <div class="field"><label for="nu-role">Роль</label>
+        <select id="nu-role" name="role">
+          <% roles.forEach((r) => { %><option value="<%= r %>" <%= (values.role || 'editor') === r ? 'selected' : '' %>><%= roleNames[r] %></option><% }) %>
+        </select></div>
+    </div>
+    <button class="btn btn-primary" type="submit">Создать пользователя</button>
+  </form>
+</div>
+
+<%- include('/partials/footer') %>

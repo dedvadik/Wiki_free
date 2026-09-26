@@ -1,0 +1,119 @@
+# =============================================================================
+#  docker-compose.yml — запуск всего стека одной командой:
+#      docker compose up -d --build
+#  После запуска сайт доступен на http://localhost:8080 (порт — APP_PORT).
+#
+#  Сервисы:
+#    db  — PostgreSQL 17 (официальный мультиархитектурный образ)
+#    app — приложение WikiSpace (собирается из Dockerfile в этой папке)
+#
+#  Все параметры берутся из файла .env рядом с этим файлом
+#  (скопируйте .env.example → .env). Синтаксис ${VAR:-значение} означает
+#  «взять VAR из окружения/.env, а если её нет — значение по умолчанию».
+# =============================================================================
+
+name: wikispace
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # База данных PostgreSQL.
+  # Данные хранятся в именованном volume db-data и переживают пересоздание
+  # контейнера (docker compose down без флага -v их НЕ удаляет).
+  # Порт наружу НЕ публикуется: к базе обращается только приложение по
+  # внутренней сети compose (по имени хоста "db").
+  # ---------------------------------------------------------------------------
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-wiki}
+      POSTGRES_USER: ${POSTGRES_USER:-wiki}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_db_password}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Проверка готовности: приложение стартует только когда БД принимает
+    # соединения (см. depends_on ниже). $$ — экранирование $ для compose.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # ---------------------------------------------------------------------------
+  # Приложение.
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      args:
+        NODE_VERSION: ${NODE_VERSION:-22}
+    # Имя образа: можно указать свой реестр, например ghcr.io/me/wikispace:1.0
+    image: ${APP_IMAGE:-wikispace:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # --- Подключение к БД через стандартные переменные libpq/pg ---------
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: ${POSTGRES_DB:-wiki}
+      PGUSER: ${POSTGRES_USER:-wiki}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-change_me_db_password}
+
+      # --- Безопасность ----------------------------------------------------
+      # Пусто → секрет сгенерируется автоматически и сохранится в volume.
+      SESSION_SECRET: ${SESSION_SECRET:-}
+      SESSION_MAX_AGE_DAYS: ${SESSION_MAX_AGE_DAYS:-14}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-10}
+      # Попыток входа/регистрации с одного IP за 15 минут.
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-20}
+
+      # --- Первый администратор (создаётся только на пустой базе) ---------
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+
+      # --- Прочее ----------------------------------------------------------
+      SEED_DEMO: ${SEED_DEMO:-true}
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-20}
+      TZ: ${TZ:-Europe/Moscow}
+
+      # Значения настроек сайта по умолчанию (SETTING_<КЛЮЧ>), например:
+      # SETTING_SITE_NAME: "Вики компании"
+      # SETTING_REQUIRE_LOGIN: "true"
+      #
+      # Вход через LDAP / Active Directory можно настроить в админке
+      # (вкладка «LDAP») или задать здесь — см. блок LDAP в .env.example.
+      # Пустое значение = «не задано»: действует значение по умолчанию из
+      # схемы настроек (src/services/settings.js) или значение из админки.
+      SETTING_LDAP_ENABLED: ${SETTING_LDAP_ENABLED:-}
+      SETTING_LDAP_URL: ${SETTING_LDAP_URL:-}
+      SETTING_LDAP_STARTTLS: ${SETTING_LDAP_STARTTLS:-}
+      SETTING_LDAP_TLS_VERIFY: ${SETTING_LDAP_TLS_VERIFY:-}
+      SETTING_LDAP_BIND_DN: ${SETTING_LDAP_BIND_DN:-}
+      SETTING_LDAP_BIND_PASSWORD: ${SETTING_LDAP_BIND_PASSWORD:-}
+      SETTING_LDAP_SEARCH_BASE: ${SETTING_LDAP_SEARCH_BASE:-}
+      SETTING_LDAP_USER_FILTER: ${SETTING_LDAP_USER_FILTER:-}
+      SETTING_LDAP_ATTR_USERNAME: ${SETTING_LDAP_ATTR_USERNAME:-}
+      SETTING_LDAP_ATTR_EMAIL: ${SETTING_LDAP_ATTR_EMAIL:-}
+      SETTING_LDAP_ATTR_DISPLAY_NAME: ${SETTING_LDAP_ATTR_DISPLAY_NAME:-}
+      SETTING_LDAP_ADMIN_GROUP: ${SETTING_LDAP_ADMIN_GROUP:-}
+      SETTING_LDAP_EDITOR_GROUP: ${SETTING_LDAP_EDITOR_GROUP:-}
+      SETTING_LDAP_DEFAULT_ROLE: ${SETTING_LDAP_DEFAULT_ROLE:-}
+      SETTING_LDAP_ALLOW_LOCAL: ${SETTING_LDAP_ALLOW_LOCAL:-}
+    ports:
+      - "${APP_PORT:-8080}:3000"
+    volumes:
+      # Загруженные файлы и автоматически созданный секрет сессий.
+      - app-data:/app/data
+      # Папка кастомизации с ХОСТА (только чтение): свои шаблоны, CSS, JS,
+      # картинки. Подробнее — custom/README.md.
+      - ./custom:/app/custom:ro
+
+volumes:
+  db-data:
+  app-data:

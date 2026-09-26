@@ -1,0 +1,44 @@
+<%#
+  ============================================================================
+  search.ejs — поиск по всем страницам
+  ----------------------------------------------------------------------------
+  Форма с фильтром по пространству и список результатов. Фрагмент текста
+  (snippetHtml) с подсвеченными <mark> совпадениями подготовлен и
+  экранирован на сервере (routes/home.js).
+  Переменные: q, spaceKey, spaces, results
+  ============================================================================
+%>
+<%- include('/partials/header', { title: q ? `Поиск: ${q}` : 'Поиск' }) %>
+
+<div class="container">
+  <h1>Поиск</h1>
+  <form class="search-form" method="get" action="/search">
+    <input type="search" name="q" value="<%= q %>" placeholder="Что ищем?" autofocus>
+    <select name="space" aria-label="Пространство">
+      <option value="">Во всех пространствах</option>
+      <% spaces.forEach((s) => { %>
+        <option value="<%= s.key %>" <%= s.key === spaceKey ? 'selected' : '' %>><%= s.name %></option>
+      <% }) %>
+    </select>
+    <button class="btn btn-primary" type="submit">Найти</button>
+  </form>
+  <p class="muted small">
+    Подсказки: <code>"точная фраза"</code>, <code>docker or kubernetes</code>, <code>-исключить</code>.
+    Учитываются словоформы: «статьи» найдётся по запросу «статья».
+  </p>
+
+  <% if (q) { %>
+    <h2 class="results-count"><%= results.length ? `Найдено: ${results.length}` : 'Ничего не найдено' %></h2>
+    <ul class="search-results">
+      <% results.forEach((r) => { %>
+        <li class="search-result">
+          <a class="search-title" href="<%= pageUrl(r) %>"><%= r.title %></a>
+          <div class="muted small"><%= r.space_icon %> <%= r.space_name %> · <%= timeAgo(r.updated_at) %></div>
+          <% if (r.snippetHtml) { %><p class="search-snippet"><%- r.snippetHtml %></p><% } %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</div>
+
+<%- include('/partials/footer') %>

@@ -1,0 +1,140 @@
+<%#
+  ============================================================================
+  pages/form.ejs — РЕДАКТОР страницы (создание и изменение)
+  ----------------------------------------------------------------------------
+  Устройство:
+   - поле заголовка;
+   - панель инструментов: кнопки с data-md="действие" — обработку выполняет
+     public/js/editor.js (вставка Markdown-разметки, загрузка файлов);
+   - рабочая область с тремя режимами (data-mode): только текст,
+     разделённый экран (текст + предпросмотр), только предпросмотр;
+   - свойства: родительская страница, порядок, метки, комментарий к версии.
+
+  Скрытые поля:
+   - _csrf           — защита от CSRF;
+   - base_version    — версия, с которой начато редактирование (для
+                       обнаружения конфликта одновременных правок);
+   - attachment_ids  — id файлов, загруженных до первого сохранения.
+
+  Переменные: isNew, space, page, form, errors, conflict, baseVersion, parentOptions
+  ============================================================================
+%>
+<%- include('/partials/header', {
+      title: isNew ? 'Новая страница' : `Редактирование: ${page.title}`,
+      bodyClass: 'editor-mode',
+    }) %>
+
+<form method="post"
+      action="<%= isNew ? `/spaces/${space.key}/pages` : `/pages/${page.id}` %>"
+      class="editor-form" data-editor-form data-page-id="<%= isNew ? '' : page.id %>">
+  <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+  <% if (!isNew) { %><input type="hidden" name="base_version" value="<%= baseVersion %>"><% } %>
+  <input type="hidden" name="attachment_ids" value="" data-editor-attachments>
+
+  <nav class="breadcrumbs">
+    <a href="/spaces/<%= space.key %>"><%= space.icon %> <%= space.name %></a>
+    <span class="sep">›</span>
+    <span><%= isNew ? 'Новая страница' : 'Редактирование' %></span>
+  </nav>
+
+  <%- include('/partials/errors') %>
+
+  <%# Предупреждение о конфликте: страницу сохранил кто-то другой. %>
+  <% if (conflict) { %>
+    <div class="flash flash-error">
+      <b>Конфликт версий.</b> Пока вы редактировали, <%= conflict.by %> сохранил(а) версию <%= conflict.version %>.
+      Ваш текст НЕ потерян — он ниже. <a href="<%= conflict.diffUrl %>" target="_blank">Посмотреть чужие изменения</a>.
+      Нажмите «Сохранить» ещё раз, чтобы перезаписать страницу своей версией.
+    </div>
+  <% } %>
+
+  <input class="editor-title" name="title" value="<%= form.title %>" placeholder="Заголовок страницы"
+         required maxlength="300" autocomplete="off" <%= isNew ? 'autofocus' : '' %>>
+
+  <%# ------------------------- Панель инструментов ---------------------- %>
+  <div class="editor-toolbar" role="toolbar" aria-label="Форматирование">
+    <div class="tool-group">
+      <button type="button" data-md="h2" title="Заголовок 2">H2</button>
+      <button type="button" data-md="h3" title="Заголовок 3">H3</button>
+    </div>
+    <div class="tool-group">
+      <button type="button" data-md="bold" title="Жирный (Ctrl+B)"><b>B</b></button>
+      <button type="button" data-md="italic" title="Курсив (Ctrl+I)"><i>I</i></button>
+      <button type="button" data-md="strike" title="Зачёркнутый"><s>S</s></button>
+      <button type="button" data-md="code" title="Код в строке">&lt;/&gt;</button>
+      <button type="button" data-md="link" title="Ссылка (Ctrl+K)">🔗</button>
+    </div>
+    <div class="tool-group">
+      <button type="button" data-md="ul" title="Маркированный список">•≡</button>
+      <button type="button" data-md="ol" title="Нумерованный список">1≡</button>
+      <button type="button" data-md="task" title="Список задач">☑</button>
+      <button type="button" data-md="quote" title="Цитата">❝</button>
+    </div>
+    <div class="tool-group">
+      <button type="button" data-md="codeblock" title="Блок кода">{ }</button>
+      <button type="button" data-md="table" title="Таблица">▦</button>
+      <button type="button" data-md="hr" title="Горизонтальная линия">―</button>
+      <button type="button" data-md="upload" title="Вставить файл или картинку">📎</button>
+    </div>
+    <div class="tool-group">
+      <%# Макросы в стиле Confluence %>
+      <button type="button" data-md="info" title="Панель «Информация»">ℹ️</button>
+      <button type="button" data-md="warning" title="Панель «Внимание»">⚠️</button>
+      <button type="button" data-md="tip" title="Панель «Совет»">💡</button>
+      <button type="button" data-md="status" title="Статус">🏷</button>
+      <button type="button" data-md="toc" title="Оглавление">☰</button>
+    </div>
+    <div class="toolbar-spacer"></div>
+    <div class="view-switch" role="group" aria-label="Режим просмотра">
+      <button type="button" data-view="edit">Текст</button>
+      <button type="button" data-view="split">Оба</button>
+      <button type="button" data-view="preview">Просмотр</button>
+    </div>
+  </div>
+
+  <%# ------------------------- Рабочая область ---------------------------
+      Перенос строки сразу после <textarea> намеренный: браузер отбрасывает
+      первый перевод строки, и так текст, начинающийся с пустой строки,
+      не потеряет её. %>
+  <div class="editor-workspace" data-mode="split">
+    <textarea name="content" data-editor-input spellcheck="true"
+              placeholder="Пишите в формате Markdown. Картинки можно вставить из буфера (Ctrl+V) или перетащить сюда.">
+<%= form.content %></textarea>
+    <div class="editor-preview markdown-body" data-editor-preview aria-live="polite"></div>
+  </div>
+  <input type="file" data-editor-file hidden multiple>
+
+  <%# ------------------------- Свойства страницы ------------------------- %>
+  <div class="editor-meta">
+    <div class="field">
+      <label for="parent_id">Родительская страница</label>
+      <select id="parent_id" name="parent_id">
+        <option value="">— верхний уровень пространства —</option>
+        <% parentOptions.forEach((o) => { %>
+          <option value="<%= o.id %>" <%= o.id === form.parent_id ? 'selected' : '' %>><%= '   '.repeat(o.depth) %><%= o.title %></option>
+        <% }) %>
+      </select>
+    </div>
+    <div class="field field-narrow">
+      <label for="position">Порядок</label>
+      <input id="position" type="number" name="position" value="<%= form.position %>" step="1">
+    </div>
+    <div class="field">
+      <label for="labels">Метки</label>
+      <input id="labels" name="labels" value="<%= form.labels %>" placeholder="api, инструкция, backend">
+    </div>
+    <div class="field">
+      <label for="change_note">Что изменено</label>
+      <input id="change_note" name="change_note" value="<%= form.change_note %>" maxlength="500" placeholder="Кратко: исправил опечатки">
+    </div>
+  </div>
+
+  <div class="editor-footer">
+    <button class="btn btn-primary" type="submit">Сохранить</button>
+    <a class="btn" href="<%= isNew ? `/spaces/${space.key}` : pageUrl(page) %>">Отмена</a>
+    <span class="muted small">Ctrl+S — сохранить · Ctrl+B / I / K — жирный, курсив, ссылка</span>
+    <span class="editor-status muted small" data-editor-status></span>
+  </div>
+</form>
+
+<%- include('/partials/footer', { scripts: ['/js/editor.js'] }) %>

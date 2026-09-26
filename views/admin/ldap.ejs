@@ -1,0 +1,97 @@
+<%#
+  ============================================================================
+  admin/ldap.ejs — вкладка «LDAP»: настройки входа через LDAP / Active Directory
+  ----------------------------------------------------------------------------
+  Состоит из трёх частей:
+   1. форма настроек (поля строятся по схеме, tab: 'ldap');
+   2. форма «Проверить подключение» — пошаговая диагностика с СОХРАНЁННЫМИ
+      настройками (журнал шагов testResult: [{ ok, text }]);
+   3. шпаргалка с типовыми значениями для OpenLDAP и Active Directory.
+
+  Переменные: groups, values, secretsSet, errors, testResult, testLogin
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'LDAP / Active Directory' }) %>
+
+<div class="container">
+  <h1>LDAP / Active Directory</h1>
+  <%- include('/partials/admin-nav') %>
+  <%- include('/partials/errors') %>
+
+  <p class="muted">
+    Пользователи каталога входят на сайт со своим корпоративным логином и паролем.
+    Учётная запись на сайте создаётся автоматически при первом входе, а имя, email
+    и (если заданы группы) роль обновляются из каталога при каждом входе.
+  </p>
+
+  <%# ---------------------- Проверка подключения ------------------------ %>
+  <form method="post" action="/admin/ldap/test" class="card ldap-test" autocomplete="off">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+    <h2 class="card-title">Проверить подключение</h2>
+    <p class="help">Проверяются <b>сохранённые</b> настройки. Логин и пароль необязательны: без них проверяется только
+      подключение к серверу, без пароля — поиск пользователя и определение роли.</p>
+    <div class="field-row">
+      <div class="field grow">
+        <label for="test_login">Тестовый логин</label>
+        <input id="test_login" name="test_login" value="<%= testLogin %>" placeholder="ivan.petrov" autocomplete="off">
+      </div>
+      <div class="field grow">
+        <label for="test_password">Пароль</label>
+        <input id="test_password" type="password" name="test_password" autocomplete="new-password">
+      </div>
+      <div class="field">
+        <button class="btn" type="submit">Проверить</button>
+      </div>
+    </div>
+
+    <% if (testResult) { %>
+      <ul class="ldap-steps">
+        <% testResult.forEach((s) => { %>
+          <li class="<%= s.ok ? 'ok' : 'fail' %>"><span class="ldap-step-icon"><%= s.ok ? '✓' : '✗' %></span><%= s.text %></li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </form>
+
+  <%# ------------------------- Настройки -------------------------------- %>
+  <form method="post" action="/admin/ldap" class="form settings-form" id="settings-form" autocomplete="off">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+
+    <%- include('/partials/settings-groups', { groups, values, secretsSet }) %>
+
+    <div class="form-actions sticky-actions">
+      <button class="btn btn-primary" type="submit">Сохранить настройки LDAP</button>
+      <span class="muted small">
+        <% if (values.ldap_enabled === true || values.ldap_enabled === 'on') { %>Вход через LDAP <b>включён</b>.<% } else { %>Вход через LDAP выключен.<% } %>
+        Локальные администраторы могут войти всегда.
+      </span>
+    </div>
+  </form>
+
+  <% groups.forEach((group, gi) => { %>
+    <form id="reset-<%= gi %>" method="post" action="/admin/settings/reset" hidden
+          data-confirm="Сбросить все настройки раздела «<%= group.name %>» к значениям по умолчанию?">
+      <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+      <input type="hidden" name="group" value="<%= group.name %>">
+    </form>
+  <% }) %>
+
+  <%# --------------------------- Шпаргалка ------------------------------ %>
+  <details class="card">
+    <summary><b>Типовые значения для OpenLDAP и Active Directory</b></summary>
+    <table class="table kv">
+      <thead><tr><th>Параметр</th><th>OpenLDAP / FreeIPA</th><th>Active Directory</th></tr></thead>
+      <tbody>
+        <tr><th>Адрес</th><td><code>ldap://ldap.example.com:389</code></td><td><code>ldaps://dc01.corp.example.com:636</code></td></tr>
+        <tr><th>Bind DN</th><td><code>cn=wiki,ou=service,dc=example,dc=com</code></td><td><code>wiki-svc@corp.example.com</code></td></tr>
+        <tr><th>Base DN</th><td><code>ou=people,dc=example,dc=com</code></td><td><code>ou=Users,dc=corp,dc=example,dc=com</code></td></tr>
+        <tr><th>Фильтр</th><td><code>(uid={{username}})</code></td><td><code>(&amp;(objectClass=user)(sAMAccountName={{username}}))</code></td></tr>
+        <tr><th>Атрибут логина</th><td><code>uid</code></td><td><code>sAMAccountName</code></td></tr>
+        <tr><th>Атрибут имени</th><td><code>cn</code></td><td><code>displayName</code></td></tr>
+        <tr><th>Группа</th><td><code>cn=wiki-admins,ou=groups,dc=example,dc=com</code></td><td><code>CN=Wiki Admins,OU=Groups,DC=corp,DC=example,DC=com</code></td></tr>
+      </tbody>
+    </table>
+  </details>
+</div>
+
+<%- include('/partials/footer') %>

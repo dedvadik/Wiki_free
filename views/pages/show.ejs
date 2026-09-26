@@ -1,0 +1,187 @@
+<%#
+  ============================================================================
+  pages/show.ejs — просмотр страницы (статьи)
+  ----------------------------------------------------------------------------
+  Макет из трёх колонок (как в Confluence):
+     [дерево пространства] [содержимое статьи] [оглавление «На этой странице»]
+  Колонка оглавления появляется, только если в статье 2+ заголовка.
+
+  Блоки содержимого сверху вниз:
+    хлебные крошки → заголовок и действия → автор/дата/версия → метки →
+    текст статьи → дочерние страницы → вложения → комментарии
+
+  Переменные: page, space, tree, ancestors, children, labels, attachments,
+              comments, isFavorite, contentHtml, toc
+  ============================================================================
+%>
+<%- include('/partials/header', { title: page.title, createUrl: `/spaces/${space.key}/pages/new?parent=${page.id}` }) %>
+<% const showToc = toc.length > 1;
+   const minLevel = showToc ? Math.min(...toc.map((t) => t.level)) : 1; %>
+
+<div class="space-layout <%= showToc ? 'has-toc' : '' %>">
+  <%- include('/partials/space-sidebar', {
+        space, tree, currentPageId: page.id, openIds: ancestors.map((a) => a.id).concat(page.id),
+      }) %>
+
+  <article class="space-content">
+    <button type="button" class="btn btn-sm sidebar-toggle" data-action="toggle-sidebar">☰ Страницы</button>
+
+    <%# ------------------------ Хлебные крошки --------------------------- %>
+    <nav class="breadcrumbs" aria-label="Путь к странице">
+      <a href="/spaces/<%= space.key %>"><%= space.icon %> <%= space.name %></a>
+      <% ancestors.forEach((a) => { %>
+        <span class="sep">›</span><a href="<%= pageUrl(a) %>"><%= a.title %></a>
+      <% }) %>
+    </nav>
+
+    <%# ---------------------- Заголовок и действия ------------------------ %>
+    <header class="page-header">
+      <h1 class="page-title"><%= page.title %></h1>
+      <div class="page-actions">
+        <% if (currentUser) { %>
+          <form method="post" action="/pages/<%= page.id %>/favorite" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+            <button class="btn btn-sm <%= isFavorite ? 'btn-starred' : '' %>" type="submit">
+              <%= isFavorite ? '★ В избранном' : '☆ В избранное' %>
+            </button>
+          </form>
+        <% } %>
+        <% if (can('editor')) { %>
+          <a class="btn btn-sm btn-primary" href="/pages/<%= page.id %>/edit">✎ Редактировать</a>
+        <% } %>
+
+        <details class="dropdown">
+          <summary class="btn btn-sm" title="Ещё">⋯</summary>
+          <div class="menu menu-right">
+            <a href="/pages/<%= page.id %>/history">🕘 История версий</a>
+            <a href="/pages/<%= page.id %>/export.md">⬇ Экспорт в Markdown</a>
+            <a href="#" data-action="print">🖨 Печать</a>
+            <% if (can('editor')) { %>
+              <a href="/spaces/<%= space.key %>/pages/new?parent=<%= page.id %>">＋ Дочерняя страница</a>
+              <form method="post" action="/pages/<%= page.id %>/delete" class="menu-form"
+                    data-confirm="Удалить страницу «<%= page.title %>»? Это действие нельзя отменить.">
+                <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+                <% if (children.length) { %>
+                  <label class="menu-check"><input type="checkbox" name="with_children" value="1"> вместе с дочерними (<%= children.length %>)</label>
+                <% } %>
+                <button type="submit" class="danger">🗑 Удалить страницу</button>
+              </form>
+            <% } %>
+          </div>
+        </details>
+      </div>
+    </header>
+
+    <div class="page-meta">
+      Создал(а) <b><%= authorName(page.created_by_name) %></b>, <%= formatDate(page.created_at) %>
+      <% if (page.version > 1) { %>
+        · изменено <span title="<%= formatDateTime(page.updated_at) %>"><%= timeAgo(page.updated_at) %></span>
+        (<%= authorName(page.updated_by_name) %>)
+      <% } %>
+      · <a href="/pages/<%= page.id %>/history">версия <%= page.version %></a>
+    </div>
+
+    <% if (labels.length) { %>
+      <div class="labels">
+        <% labels.forEach((l) => { %><a class="label-chip" href="/labels/<%= encodeURIComponent(l.name) %>">#<%= l.name %></a><% }) %>
+      </div>
+    <% } %>
+
+    <%# ---------------------- Текст статьи ---------------------------------
+        HTML получен из Markdown и очищен sanitize-html на сервере,
+        поэтому выводится без повторного экранирования. %>
+    <div class="markdown-body page-content">
+      <% if (page.content.trim()) { %>
+        <%- contentHtml %>
+      <% } else { %>
+        <p class="muted">Страница пока пуста.</p>
+      <% } %>
+    </div>
+
+    <%# ---------------------- Дочерние страницы -------------------------- %>
+    <% if (children.length) { %>
+      <section class="page-section">
+        <h2 class="section-title">Дочерние страницы</h2>
+        <ul class="children-list">
+          <% children.forEach((c) => { %><li><a href="<%= pageUrl(c) %>">📄 <%= c.title %></a></li><% }) %>
+        </ul>
+      </section>
+    <% } %>
+
+    <%# -------------------------- Вложения ------------------------------- %>
+    <% if (attachments.length) { %>
+      <section class="page-section">
+        <h2 class="section-title">Вложения (<%= attachments.length %>)</h2>
+        <table class="table">
+          <tbody>
+            <% attachments.forEach((a) => { %>
+              <tr>
+                <td><a href="/uploads/<%= a.stored_name %>" target="_blank" rel="noopener">📎 <%= a.original_name %></a></td>
+                <td class="muted small nowrap"><%= fileSize(a.size_bytes) %></td>
+                <td class="muted small"><%= authorName(a.uploaded_by_name) %>, <%= formatDate(a.created_at) %></td>
+                <% if (can('editor')) { %>
+                  <td class="right">
+                    <form method="post" action="/attachments/<%= a.id %>/delete" class="inline" data-confirm="Удалить вложение «<%= a.original_name %>»? Ссылки на него в тексте перестанут работать.">
+                      <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+                      <button class="link-btn danger" type="submit">удалить</button>
+                    </form>
+                  </td>
+                <% } %>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </section>
+    <% } %>
+
+    <%# ------------------------- Комментарии ----------------------------- %>
+    <section class="page-section" id="comments">
+      <h2 class="section-title">Комментарии (<%= comments.length %>)</h2>
+
+      <% comments.forEach((c) => { %>
+        <div class="comment" id="comment-<%= c.id %>">
+          <span class="avatar avatar-sm"><%= initials(c.author_name) %></span>
+          <div class="comment-body">
+            <div class="comment-meta">
+              <b><%= authorName(c.author_name) %></b>
+              <span class="muted small" title="<%= formatDateTime(c.created_at) %>"><%= timeAgo(c.created_at) %></span>
+              <% if (currentUser && (c.author_id === currentUser.id || can('admin'))) { %>
+                <form method="post" action="/comments/<%= c.id %>/delete" class="inline" data-confirm="Удалить комментарий?">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+                  <button class="link-btn danger small" type="submit">удалить</button>
+                </form>
+              <% } %>
+            </div>
+            <div class="markdown-body"><%- c.html %></div>
+          </div>
+        </div>
+      <% }) %>
+
+      <% if (!site.allow_comments) { %>
+        <p class="muted small">Комментарии отключены администратором.</p>
+      <% } else if (currentUser) { %>
+        <form method="post" action="/pages/<%= page.id %>/comments" class="comment-form">
+          <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+          <textarea name="content" rows="3" placeholder="Напишите комментарий… (поддерживается Markdown)" required maxlength="10000"></textarea>
+          <button class="btn btn-primary" type="submit">Отправить</button>
+        </form>
+      <% } else { %>
+        <p class="muted"><a href="/login">Войдите</a>, чтобы оставить комментарий.</p>
+      <% } %>
+    </section>
+  </article>
+
+  <%# ------------------ Оглавление «На этой странице» -------------------- %>
+  <% if (showToc) { %>
+    <aside class="page-toc" aria-label="Оглавление">
+      <div class="toc-title">На этой странице</div>
+      <ul>
+        <% toc.forEach((t) => { %>
+          <li class="toc-l<%= t.level - minLevel %>"><a href="#<%= t.id %>"><%= t.text %></a></li>
+        <% }) %>
+      </ul>
+    </aside>
+  <% } %>
+</div>
+
+<%- include('/partials/footer') %>

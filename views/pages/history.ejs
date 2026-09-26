@@ -1,0 +1,73 @@
+<%#
+  ============================================================================
+  pages/history.ejs — история версий страницы
+  ----------------------------------------------------------------------------
+  Таблица всех версий (новые сверху). Две колонки радиокнопок «от» и «до»
+  позволяют выбрать любые две версии и сравнить их (GET-форма на /diff).
+  Для старых версий доступны просмотр и восстановление.
+  Переменные: page, versions
+  ============================================================================
+%>
+<%- include('/partials/header', { title: `История: ${page.title}` }) %>
+
+<div class="container">
+  <nav class="breadcrumbs">
+    <a href="/spaces/<%= page.space_key %>"><%= page.space_icon %> <%= page.space_name %></a>
+    <span class="sep">›</span><a href="<%= pageUrl(page) %>"><%= page.title %></a>
+    <span class="sep">›</span><span>История</span>
+  </nav>
+  <h1>История версий</h1>
+
+  <form method="get" action="/pages/<%= page.id %>/diff">
+    <table class="table history-table">
+      <thead>
+        <tr>
+          <th title="Сравнить от">от</th>
+          <th title="Сравнить до">до</th>
+          <th>Версия</th>
+          <th>Автор</th>
+          <th>Дата</th>
+          <th>Комментарий</th>
+          <th class="right">Размер</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% versions.forEach((v, i) => { const isCurrent = v.version === page.version; %>
+          <tr class="<%= isCurrent ? 'current' : '' %>">
+            <%# По умолчанию выбраны две последние версии. %>
+            <td><input type="radio" name="from" value="<%= v.version %>" <%= i === 1 || (versions.length === 1 && i === 0) ? 'checked' : '' %>></td>
+            <td><input type="radio" name="to" value="<%= v.version %>" <%= i === 0 ? 'checked' : '' %>></td>
+            <td>
+              <a href="/pages/<%= page.id %>/versions/<%= v.version %>">v<%= v.version %></a>
+              <% if (isCurrent) { %><span class="badge">текущая</span><% } %>
+            </td>
+            <td><%= authorName(v.author_name) %></td>
+            <td class="nowrap" title="<%= formatDateTime(v.created_at) %>"><%= formatDateTime(v.created_at) %></td>
+            <td><%= v.change_note %></td>
+            <td class="right muted small nowrap"><%= fileSize(v.size) %></td>
+            <td class="right nowrap">
+              <% if (!isCurrent && can('editor')) { %>
+                <button class="link-btn" type="submit" form="restore-<%= v.version %>">восстановить</button>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+    <% if (versions.length > 1) { %>
+      <button class="btn btn-primary" type="submit">Сравнить выбранные версии</button>
+    <% } %>
+  </form>
+
+  <%# Формы восстановления вынесены за пределы формы сравнения (вложенные
+      формы в HTML запрещены); кнопки связаны с ними через атрибут form. %>
+  <% versions.forEach((v) => { if (v.version !== page.version) { %>
+    <form id="restore-<%= v.version %>" method="post" action="/pages/<%= page.id %>/versions/<%= v.version %>/restore"
+          data-confirm="Восстановить версию <%= v.version %>? Будет создана новая версия с её содержимым." hidden>
+      <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+    </form>
+  <% } }) %>
+</div>
+
+<%- include('/partials/footer') %>

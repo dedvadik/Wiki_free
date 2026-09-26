@@ -1,0 +1,39 @@
+<%#
+  ============================================================================
+  auth/login.ejs — страница входа
+  Входить можно по логину ИЛИ email. autocomplete-атрибуты помогают
+  менеджерам паролей правильно подставлять данные.
+  Переменные: login (введённое значение), error (текст ошибки или null)
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'Вход', bodyClass: 'auth-page' }) %>
+
+<div class="auth-card card">
+  <h1>Вход</h1>
+  <p class="muted"><%= site.site_tagline %></p>
+  <% if (site.ldap_enabled) { %>
+    <%# Подсказка, когда включён вход через каталог. %>
+    <p class="help">Используйте логин и пароль вашей корпоративной учётной записи.</p>
+  <% } %>
+
+  <% if (error) { %><div class="flash flash-error"><%= error %></div><% } %>
+
+  <form method="post" action="/login" class="form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+    <div class="field">
+      <label for="login">Логин или email</label>
+      <input id="login" name="login" value="<%= login %>" required autofocus autocomplete="username">
+    </div>
+    <div class="field">
+      <label for="password">Пароль</label>
+      <input id="password" type="password" name="password" required autocomplete="current-password">
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">Войти</button>
+  </form>
+
+  <% if (site.allow_registration) { %>
+    <p class="auth-switch">Нет учётной записи? <a href="/register">Зарегистрируйтесь</a></p>
+  <% } %>
+</div>
+
+<%- include('/partials/footer') %>

@@ -1,0 +1,104 @@
+<%#
+  ============================================================================
+  profile.ejs — личный профиль: данные, смена пароля, последние правки
+  Для LDAP-пользователей данные только показываются: имя, email и пароль
+  хранятся в каталоге и обновляются при каждом входе.
+  Блок «Тема оформления» (#theme) доступен всем, включая LDAP-пользователей,
+  если администратор разрешил выбор темы.
+  Переменные: errors, edits (последние страницы, которые правил пользователь),
+              themes (темы оформления), siteTheme (тема сайта по умолчанию)
+  ============================================================================
+%>
+<% const isLdap = currentUser.auth_source === 'ldap'; %>
+<%- include('/partials/header', { title: 'Профиль' }) %>
+
+<div class="narrow">
+  <div class="profile-head">
+    <span class="avatar avatar-lg"><%= initials(currentUser.display_name) %></span>
+    <div>
+      <h1><%= currentUser.display_name %></h1>
+      <div class="muted">@<%= currentUser.username %> · <%= roleNames[currentUser.role] %></div>
+    </div>
+  </div>
+
+  <%- include('/partials/errors') %>
+
+  <% if (isLdap) { %>
+    <%# LDAP: только просмотр, без форм изменения. %>
+    <div class="card">
+      <h2 class="card-title">Личные данные <span class="badge">LDAP</span></h2>
+      <table class="table kv">
+        <tr><th>Имя</th><td><%= currentUser.display_name %></td></tr>
+        <tr><th>Email</th><td><%= currentUser.email %></td></tr>
+      </table>
+      <p class="help">Вы входите с корпоративной учётной записью. Имя, email и пароль управляются в каталоге
+        (LDAP / Active Directory) и обновляются здесь при каждом входе.</p>
+    </div>
+  <% } else { %>
+  <form method="post" action="/profile" class="form card">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+    <h2 class="card-title">Личные данные</h2>
+    <div class="field">
+      <label for="display_name">Имя</label>
+      <input id="display_name" name="display_name" value="<%= currentUser.display_name %>" required maxlength="100">
+    </div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" name="email" value="<%= currentUser.email %>" required>
+    </div>
+    <button class="btn btn-primary" type="submit">Сохранить</button>
+  </form>
+
+  <form method="post" action="/profile/password" class="form card">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+    <h2 class="card-title">Смена пароля</h2>
+    <div class="field">
+      <label for="current_password">Текущий пароль</label>
+      <input id="current_password" type="password" name="current_password" required autocomplete="current-password">
+    </div>
+    <div class="field-row">
+      <div class="field grow">
+        <label for="new_password">Новый пароль</label>
+        <input id="new_password" type="password" name="new_password" required minlength="8" autocomplete="new-password">
+      </div>
+      <div class="field grow">
+        <label for="new_password_confirm">Повторите</label>
+        <input id="new_password_confirm" type="password" name="new_password_confirm" required minlength="8" autocomplete="new-password">
+      </div>
+    </div>
+    <button class="btn" type="submit">Изменить пароль</button>
+  </form>
+  <% } %>
+
+  <% if (site.allow_user_themes) { %>
+    <%# ------------------------- Тема оформления -------------------------- %>
+    <form method="post" action="/profile/theme" class="card" id="theme">
+      <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+      <h2 class="card-title">Тема оформления</h2>
+      <p class="help">Тема меняет внешний вид сайта только для вас. Светлый или тёмный режим переключается кнопкой ◐ в шапке.</p>
+      <%- include('/partials/theme-picker', {
+            name: 'theme',
+            selected: currentUser.theme || '',
+            themes,
+            defaultOption: `Как на сайте — сейчас «${siteTheme ? siteTheme.name : 'Классическая'}»`,
+          }) %>
+      <button class="btn btn-primary" type="submit">Применить тему</button>
+    </form>
+  <% } %>
+
+  <div class="card">
+    <h2 class="card-title">Мои последние правки</h2>
+    <% if (!edits.length) { %>
+      <p class="muted">Вы ещё не редактировали страницы.</p>
+    <% } else { %>
+      <ul class="compact-list">
+        <% edits.forEach((e) => { %>
+          <li><%= e.space_icon %> <a href="<%= pageUrl(e) %>"><%= e.title %></a>
+            <span class="muted small">v<%= e.version %>, <%= timeAgo(e.created_at) %></span></li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </div>
+</div>
+
+<%- include('/partials/footer') %>

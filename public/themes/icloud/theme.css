@@ -1,0 +1,349 @@
+/* ============================================================================
+   Тема «iCloud» — в духе iCloud.com / macOS
+   ============================================================================
+   Подключается ПОСЛЕ базового public/css/app.css и переопределяет:
+     1. CSS-переменные (палитра Apple, шрифт SF Pro, скругления, тени);
+     2. стили отдельных компонентов там, где одних переменных мало
+        («стеклянная» шапка, кнопки-таблетки, сегментированные переключатели,
+        статья на белом «листе» поверх фона с мягким градиентом).
+
+   Приёмы стиля:
+     - backdrop-filter: blur() — эффект матового стекла (шапка, панели, меню);
+     - border-radius 980px — «таблетки» (кнопки, метки, статусы);
+     - фон rgba(118,118,128,.12) — системная «заливка» Apple для вторичных
+       элементов, одинаково выглядит в светлом и тёмном режиме;
+     - производные цвета (наведение, подсветка, ссылки) вычисляются из
+       --primary через color-mix, поэтому фирменный цвет, заданный в админке,
+       корректно ложится и на эту тему.
+
+   Тёмный режим — блок :root[data-mode="dark"] (палитра тёмного macOS).
+   ============================================================================ */
+
+
+/* ---------------------------------------------------------------------------
+   1. ПЕРЕМЕННЫЕ — светлый режим
+   --------------------------------------------------------------------------- */
+:root {
+  --primary: #0071e3;                                              /* Apple blue */
+  --primary-hover: color-mix(in srgb, var(--primary) 88%, #fff);
+  --primary-soft: color-mix(in srgb, var(--primary) 12%, transparent);
+  --link: color-mix(in srgb, var(--primary) 88%, #000);
+
+  --bg: #f5f5f7;                      /* фон страницы (светло-серый Apple) */
+  --bg-soft: rgba(0, 0, 0, .035);     /* лёгкая подложка на белых поверхностях */
+  --bg-hover: rgba(0, 0, 0, .05);
+  --surface: #ffffff;                 /* карточки, «листы» */
+  --text: #1d1d1f;
+  --text-muted: #6e6e73;
+  --border: #d2d2d7;
+  --border-strong: #c7c7cc;
+  --code-bg: #f5f5f7;
+  --fill: rgba(118, 118, 128, .12);   /* системная заливка вторичных элементов */
+  --fill-hover: rgba(118, 118, 128, .2);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 6px 24px rgba(0, 0, 0, .06);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, .16);
+
+  --success: #248a3d;
+  --danger: #d70015;
+  --warning: #ff9f0a;
+
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Segoe UI", Roboto, sans-serif;
+  --radius: 12px;
+  --topbar-height: 60px;
+
+  /* Шапка — полупрозрачная: сквозь неё при прокрутке видно содержимое. */
+  --header-bg: rgba(255, 255, 255, .72);
+  --header-text: #1d1d1f;
+  --glass: saturate(180%) blur(20px);
+  --glass-panel: rgba(255, 255, 255, .62);
+  --glass-menu: rgba(255, 255, 255, .86);
+  --hairline: rgba(0, 0, 0, .08);
+}
+
+
+/* ---------------------------------------------------------------------------
+   1a. ПЕРЕМЕННЫЕ — тёмный режим (палитра тёмного macOS)
+   --------------------------------------------------------------------------- */
+:root[data-mode="dark"] {
+  --primary: #0a84ff;
+  --primary-hover: color-mix(in srgb, var(--primary) 80%, #fff);
+  --primary-soft: color-mix(in srgb, var(--primary) 22%, transparent);
+  --link: color-mix(in srgb, var(--primary) 72%, #fff);
+
+  --bg: #000000;
+  --bg-soft: rgba(255, 255, 255, .06);
+  --bg-hover: rgba(255, 255, 255, .08);
+  --surface: #1c1c1e;
+  --text: #f5f5f7;
+  --text-muted: #a1a1a6;
+  --border: #38383a;
+  --border-strong: #48484a;
+  --code-bg: #2c2c2e;
+  --fill: rgba(118, 118, 128, .24);
+  --fill-hover: rgba(118, 118, 128, .34);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 6px 24px rgba(0, 0, 0, .35);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, .6);
+
+  --success: #30d158;
+  --danger: #ff453a;
+
+  --header-bg: rgba(29, 29, 31, .72);
+  --header-text: #f5f5f7;
+  --glass-panel: rgba(44, 44, 46, .55);
+  --glass-menu: rgba(44, 44, 46, .9);
+  --hairline: rgba(255, 255, 255, .1);
+}
+
+
+/* ---------------------------------------------------------------------------
+   2. ФОН И ТИПОГРАФИКА
+   Мягкие цветные «пятна» на фоне, как на главной iCloud.com.
+   background-attachment: fixed — фон не прокручивается вместе со страницей.
+   --------------------------------------------------------------------------- */
+body {
+  background:
+    radial-gradient(1100px 560px at 0% -10%, color-mix(in srgb, var(--primary) 11%, transparent), transparent 60%),
+    radial-gradient(900px 520px at 100% 0%, rgba(175, 82, 222, .08), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+:root[data-mode="dark"] body {
+  background:
+    radial-gradient(1100px 560px at 0% -10%, color-mix(in srgb, var(--primary) 16%, transparent), transparent 60%),
+    radial-gradient(900px 520px at 100% 0%, rgba(191, 90, 242, .12), transparent 60%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+h1, h2, h3, .card-title, .page-title, .editor-title { letter-spacing: -.022em; }
+h1, .page-title { font-weight: 700; }
+
+
+/* ---------------------------------------------------------------------------
+   3. ШАПКА — «матовое стекло»
+   --------------------------------------------------------------------------- */
+.topbar {
+  background: var(--header-bg);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  box-shadow: 0 1px 0 var(--hairline);
+}
+.brand { font-weight: 600; font-size: 1.12rem; }
+.brand-logo { height: 32px; }
+
+.topnav a { padding: 7px 14px; font-size: .95rem; opacity: .8; }
+.topnav a:hover, .topnav a.active { background: var(--fill); }
+
+/* Поиск: серая «таблетка» со значком лупы (SVG встроен как data-URI). */
+.search-box input {
+  height: 38px;
+  padding: 0 14px 0 36px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--fill) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E") no-repeat 12px 50%;
+  color: var(--text);
+  font-size: .95rem;
+}
+.search-box input::placeholder { color: var(--text-muted); opacity: 1; }
+.search-box input:focus { background-color: var(--surface); box-shadow: 0 0 0 4px var(--primary-soft); }
+
+.topbar .btn { height: 36px; padding: 0 16px; font-size: .92rem; }
+.btn-create { background: var(--primary); border-color: transparent; color: #fff; }
+.btn-create:hover { background: var(--primary-hover); }
+.btn-on-header { background: var(--fill); border-color: transparent; color: var(--header-text); }
+.btn-on-header:hover { background: var(--fill-hover); }
+.icon-btn { width: 38px; height: 38px; font-size: 1.15rem; }
+.icon-btn:hover { background: var(--fill); }
+.user-menu .avatar {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, #5ac8fa, #007aff);
+  box-shadow: none;
+}
+
+/* Меню — стеклянная панель; пункт при наведении подсвечивается как в macOS. */
+.menu {
+  padding: 6px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--glass-menu);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--hairline);
+}
+.menu a, .menu button { border-radius: 8px; padding: 7px 12px; }
+.menu a:hover, .menu button:hover { background: var(--primary); color: #fff; }
+.menu .danger:hover { background: var(--danger); color: #fff; }
+.menu-header { padding: 6px 12px 10px; border-bottom-color: var(--hairline); }
+.menu-form { border-top-color: var(--hairline); }
+
+.announcement { border-bottom: 0; }
+
+
+/* ---------------------------------------------------------------------------
+   4. КНОПКИ И ПОЛЯ ВВОДА
+   --------------------------------------------------------------------------- */
+.btn {
+  padding: 8px 18px;
+  border-color: transparent;
+  border-radius: 980px;
+  background: var(--fill);
+  color: var(--text);
+}
+.btn:hover { background: var(--fill-hover); }
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-sm { padding: 5px 13px; }
+.btn-starred { background: rgba(255, 204, 0, .2); color: #a05a00; }
+:root[data-mode="dark"] .btn-starred { color: #ffd60a; }
+
+input, select, textarea { border-color: var(--border); border-radius: 10px; }
+input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px var(--primary-soft); }
+
+.flash { border-left: 0; border-radius: 12px; }
+
+
+/* ---------------------------------------------------------------------------
+   5. КАРТОЧКИ, СПИСКИ, ВКЛАДКИ
+   Карточки — белые «виджеты» без рамки с мягкой тенью.
+   --------------------------------------------------------------------------- */
+.card { border: 0; border-radius: 18px; padding: 24px; box-shadow: var(--shadow); }
+:root[data-mode="dark"] .card { box-shadow: var(--shadow), 0 0 0 1px var(--hairline); }
+.card-title { font-weight: 600; }
+
+.space-card { border-radius: 20px; }
+.space-card-stripe { height: 4px; }
+.space-icon { border-radius: 24%; }               /* «иконка приложения» */
+.label-chip { border: 0; border-radius: 980px; background: var(--fill); }
+.badge { border-radius: 980px; }
+.choice { border-radius: 12px; }
+.children-list a { border: 0; border-radius: 12px; background: var(--surface); box-shadow: var(--shadow); }
+.list-item, .search-result, .comment, .table th, .table td { border-bottom-color: var(--hairline); }
+.table th { text-transform: none; letter-spacing: 0; font-size: .85rem; }
+.role { border-radius: 980px; }
+
+/* Вкладки админки → сегментированный переключатель iOS/macOS. */
+.tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-bottom: 0;
+  border-radius: 10px;
+  background: var(--fill);
+}
+.tabs a { margin: 0; padding: 6px 16px; border: 0; border-radius: 8px; color: var(--text); }
+.tabs a.active { color: var(--text); background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+:root[data-mode="dark"] .tabs a.active { background: #636366; }
+
+.auth-card { border-radius: 22px; padding: 36px; }
+.danger-zone { box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--danger) 35%, transparent); }
+.theme-card { border-radius: 16px; }
+
+
+/* ---------------------------------------------------------------------------
+   6. ПРОСТРАНСТВО И СТРАНИЦА
+   Боковая панель — стеклянная, как сайдбар macOS; статья лежит на белом
+   «листе» поверх фона с градиентом (как документ в iCloud Pages).
+   --------------------------------------------------------------------------- */
+.sidebar {
+  padding: 18px 12px;
+  border-radius: 18px;
+  background: var(--glass-panel);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  box-shadow: var(--shadow);
+}
+.tree-link { border-radius: 8px; padding: 5px 8px; }
+.tree-link.active { background: var(--primary-soft); color: var(--link); }
+
+.space-content {
+  padding: 32px 40px 40px;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.page-title { font-size: 2.2rem; }
+
+
+/* ---------------------------------------------------------------------------
+   7. ТИПОГРАФИКА СТАТЬИ
+   --------------------------------------------------------------------------- */
+.markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; letter-spacing: -.02em; }
+.markdown-body h2 { border-bottom: 0; }
+.markdown-body pre { border: 0; border-radius: 14px; }
+.markdown-body code { border-radius: 6px; }
+.markdown-body img { border-radius: 14px; }
+.markdown-body blockquote { border-left: 3px solid var(--primary); }
+.markdown-body th { background: var(--bg-soft); }
+.markdown-body th, .markdown-body td { border-color: var(--hairline); }
+.markdown-body details { border-color: var(--hairline); border-radius: 12px; }
+
+/* Панели — мягкая цветная подложка без рамки; статусы — «таблетки». */
+.panel { border: 0; border-radius: 14px; background: color-mix(in srgb, var(--panel) 10%, var(--surface)); }
+.status { border: 0; border-radius: 980px; padding: 1px 9px; }
+.toc-macro { border-radius: 14px; }
+.copy-btn { border: 0; border-radius: 8px; background: var(--fill); }
+
+
+/* ---------------------------------------------------------------------------
+   8. РЕДАКТОР
+   --------------------------------------------------------------------------- */
+.editor-title { border-bottom-color: var(--hairline); font-weight: 700; }
+.editor-toolbar {
+  border: 0;
+  border-radius: 14px 14px 0 0;
+  background: var(--glass-menu);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  box-shadow: 0 1px 0 var(--hairline);
+}
+.tool-group { border-right-color: var(--hairline); }
+.editor-toolbar button { border-radius: 8px; }
+.editor-toolbar button:hover { background: var(--fill); border-color: transparent; }
+
+/* Переключатель «Текст / Оба / Просмотр» — сегментированный контрол. */
+.view-switch { padding: 2px; border: 0; border-radius: 9px; background: var(--fill); }
+.view-switch button { height: 28px; border-radius: 7px; }
+.view-switch button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+:root[data-mode="dark"] .view-switch button.active { background: #636366; }
+
+.editor-workspace {
+  overflow: hidden;
+  border: 0;
+  border-radius: 0 0 14px 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.editor-workspace textarea { border-right-color: var(--hairline); }
+
+/* Нижние «прилипающие» панели — тоже стеклянные. */
+.editor-footer, .sticky-actions {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border-top-color: var(--hairline);
+}
+
+
+/* ---------------------------------------------------------------------------
+   9. ИСТОРИЯ, СРАВНЕНИЕ, ПРОЧЕЕ
+   --------------------------------------------------------------------------- */
+.version-banner { border: 0; border-radius: 14px; }
+.diff-wrap { border: 0; border-radius: 14px; box-shadow: var(--shadow); }
+.ldap-steps { border-radius: 12px; }
+.site-footer { border-top: 0; }
+
+
+/* ---------------------------------------------------------------------------
+   10. АДАПТИВНОСТЬ
+   --------------------------------------------------------------------------- */
+@media (max-width: 900px) {
+  .space-content { padding: 20px 18px 28px; border-radius: 18px; }
+  .sidebar { border-radius: 0 18px 18px 0; }
+}
+@media (max-width: 640px) {
+  .page-title { font-size: 1.7rem; }
+}

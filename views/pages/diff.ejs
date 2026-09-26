@@ -1,0 +1,63 @@
+<%#
+  ============================================================================
+  pages/diff.ejs — сравнение двух версий страницы
+  ----------------------------------------------------------------------------
+  Построчный diff в стиле GitHub: зелёные строки добавлены, красные удалены,
+  длинные неизменённые участки свёрнуты (см. src/services/diff.js).
+  Если изменился заголовок — он показан отдельно над таблицей.
+  Переменные: page, a (старая версия), b (новая версия), diff { rows, added, removed }
+  ============================================================================
+%>
+<%- include('/partials/header', { title: `Сравнение версий: ${page.title}` }) %>
+
+<div class="container">
+  <nav class="breadcrumbs">
+    <a href="/spaces/<%= page.space_key %>"><%= page.space_icon %> <%= page.space_name %></a>
+    <span class="sep">›</span><a href="<%= pageUrl(page) %>"><%= page.title %></a>
+    <span class="sep">›</span><a href="/pages/<%= page.id %>/history">История</a>
+    <span class="sep">›</span><span>Сравнение</span>
+  </nav>
+
+  <h1>Версия <%= a.version %> → версия <%= b.version %></h1>
+  <p class="muted">
+    <%= authorName(a.author_name) %>, <%= formatDateTime(a.created_at) %>
+    &nbsp;→&nbsp;
+    <%= authorName(b.author_name) %>, <%= formatDateTime(b.created_at) %>
+  </p>
+
+  <div class="diff-stats">
+    <span class="diff-added">+<%= diff.added %></span>
+    <span class="diff-removed">−<%= diff.removed %></span>
+    <span class="muted">строк</span>
+  </div>
+
+  <% if (a.title !== b.title) { %>
+    <div class="card diff-title">
+      Заголовок: <del><%= a.title %></del> → <ins><%= b.title %></ins>
+    </div>
+  <% } %>
+
+  <% if (!diff.added && !diff.removed) { %>
+    <p class="muted">Текст этих версий совпадает.</p>
+  <% } else { %>
+    <div class="diff-wrap">
+      <table class="diff">
+        <tbody>
+          <% diff.rows.forEach((r) => { %>
+            <% if (r.type === 'skip') { %>
+              <tr class="diff-skip"><td colspan="3">⋯ без изменений: <%= r.count %> стр. ⋯</td></tr>
+            <% } else { %>
+              <tr class="diff-<%= r.type %>">
+                <td class="ln"><%= r.oldNo ?? '' %></td>
+                <td class="ln"><%= r.newNo ?? '' %></td>
+                <td class="code"><span class="sign"><%= r.type === 'add' ? '+' : r.type === 'del' ? '−' : ' ' %></span><%= r.text %></td>
+              </tr>
+            <% } %>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>
+
+<%- include('/partials/footer') %>

@@ -1,0 +1,74 @@
+<%#
+  ============================================================================
+  spaces/form.ejs — создание и настройка пространства
+  ----------------------------------------------------------------------------
+  Один шаблон на два случая (isNew = true/false). Ключ задаётся только при
+  создании: он используется в адресах страниц и потом не меняется.
+  Для администратора внизу — «опасная зона» с удалением пространства.
+  Переменные: isNew, space, errors
+  ============================================================================
+%>
+<%- include('/partials/header', { title: isNew ? 'Новое пространство' : `Настройки: ${space.name}` }) %>
+
+<div class="narrow">
+  <h1><%= isNew ? 'Новое пространство' : 'Настройки пространства' %></h1>
+  <%- include('/partials/errors') %>
+
+  <form method="post" action="<%= isNew ? '/spaces' : `/spaces/${space.key}` %>" class="form card">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+
+    <div class="field-row">
+      <div class="field field-icon">
+        <label for="icon">Иконка</label>
+        <input id="icon" name="icon" value="<%= space.icon %>" maxlength="16" class="input-emoji">
+      </div>
+      <div class="field grow">
+        <label for="name">Название</label>
+        <input id="name" name="name" value="<%= space.name %>" required maxlength="200" placeholder="Например: Разработка" autofocus>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field grow">
+        <label for="key">Ключ</label>
+        <% if (isNew) { %>
+          <input id="key" name="key" value="<%= space.key %>" required pattern="[A-Za-z][A-Za-z0-9]{1,19}" maxlength="20" placeholder="DEV" class="input-key">
+          <p class="help">Латиница и цифры, 2–20 символов. Используется в адресе: /spaces/<b>DEV</b>. Изменить потом нельзя.</p>
+        <% } else { %>
+          <input id="key" value="<%= space.key %>" disabled>
+        <% } %>
+      </div>
+      <div class="field">
+        <label for="color">Цвет</label>
+        <input id="color" type="color" name="color" value="<%= space.color %>">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="description">Описание (Markdown)</label>
+      <textarea id="description" name="description" rows="6" placeholder="Для чего это пространство, кто за него отвечает…">
+<%= space.description %></textarea>
+      <p class="help">Показывается на главной странице пространства.</p>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit"><%= isNew ? 'Создать' : 'Сохранить' %></button>
+      <a class="btn" href="<%= isNew ? '/spaces' : `/spaces/${space.key}` %>">Отмена</a>
+    </div>
+  </form>
+
+  <% if (!isNew && can('admin')) { %>
+    <%# Удаление требует ввести ключ пространства — защита от случайного клика. %>
+    <form method="post" action="/spaces/<%= space.key %>/delete" class="card danger-zone">
+      <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+      <h2>Опасная зона</h2>
+      <p>Удаление пространства <b>необратимо</b>: будут удалены все его страницы, версии и комментарии.</p>
+      <div class="field-row">
+        <input name="confirm_key" placeholder="Введите ключ <%= space.key %> для подтверждения" autocomplete="off" class="grow">
+        <button class="btn btn-danger" type="submit">Удалить пространство</button>
+      </div>
+    </form>
+  <% } %>
+</div>
+
+<%- include('/partials/footer') %>

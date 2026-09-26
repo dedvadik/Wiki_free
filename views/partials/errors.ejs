@@ -1,0 +1,13 @@
+<%#
+  partials/errors.ejs — список ошибок валидации формы.
+  Выводится, только если передан непустой массив errors.
+%>
+<% if (locals.errors && errors.length) { %>
+  <div class="flash flash-error" role="alert">
+    <% if (errors.length === 1) { %>
+      <%= errors[0] %>
+    <% } else { %>
+      <ul class="error-list"><% errors.forEach((e) => { %><li><%= e %></li><% }) %></ul>
+    <% } %>
+  </div>
+<% } %>

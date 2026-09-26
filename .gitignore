@@ -1,0 +1,11 @@
+node_modules/
+data/
+.env
+npm-debug.log*
+.DS_Store
+scratch_tmp/
+
+# Пользовательская кастомизация — у каждого своя; сохраняем только описание.
+custom/*
+!custom/README.md
+!custom/examples/

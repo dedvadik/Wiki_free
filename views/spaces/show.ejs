@@ -1,0 +1,73 @@
+<%#
+  ============================================================================
+  spaces/show.ejs — главная страница пространства
+  ----------------------------------------------------------------------------
+  Слева — дерево страниц; справа — заголовок, описание (Markdown),
+  страницы верхнего уровня и последние изменения в этом пространстве.
+  Переменные: space, tree, recent, descriptionHtml
+  ============================================================================
+%>
+<%- include('/partials/header', { title: space.name, createUrl: `/spaces/${space.key}/pages/new` }) %>
+
+<div class="space-layout">
+  <%- include('/partials/space-sidebar', { space, tree }) %>
+
+  <section class="space-content">
+    <button type="button" class="btn btn-sm sidebar-toggle" data-action="toggle-sidebar">☰ Страницы</button>
+
+    <header class="space-hero">
+      <span class="space-icon space-icon-lg" style="background: <%= space.color %>"><%= space.icon %></span>
+      <div class="grow">
+        <h1><%= space.name %></h1>
+        <div class="muted small">Ключ: <%= space.key %> · создано <%= formatDate(space.created_at) %></div>
+      </div>
+      <% if (can('editor')) { %>
+        <div class="page-actions">
+          <a class="btn btn-primary" href="/spaces/<%= space.key %>/pages/new">+ Новая страница</a>
+          <a class="btn" href="/spaces/<%= space.key %>/edit">⚙ Настройки</a>
+        </div>
+      <% } %>
+    </header>
+
+    <% if (descriptionHtml) { %>
+      <div class="markdown-body space-description"><%- descriptionHtml %></div>
+    <% } %>
+
+    <div class="two-cols">
+      <div class="card">
+        <h2 class="card-title">Разделы</h2>
+        <% if (!tree.length) { %>
+          <p class="muted">Страниц пока нет.
+            <% if (can('editor')) { %><a href="/spaces/<%= space.key %>/pages/new">Создайте первую</a>.<% } %>
+          </p>
+        <% } else { %>
+          <ul class="compact-list">
+            <% tree.forEach((node) => { %>
+              <li>📄 <a href="<%= pageUrl(node) %>"><%= node.title %></a>
+                <% if (node.children.length) { %><span class="muted small">+<%= node.children.length %></span><% } %>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">Последние изменения</h2>
+        <% if (!recent.length) { %>
+          <p class="muted">Нет изменений.</p>
+        <% } else { %>
+          <ul class="compact-list">
+            <% recent.forEach((p) => { %>
+              <li>
+                <a href="<%= pageUrl(p) %>"><%= p.title %></a>
+                <span class="muted small"><%= authorName(p.updated_by_name) %>, <%= timeAgo(p.updated_at) %></span>
+              </li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </div>
+    </div>
+  </section>
+</div>
+
+<%- include('/partials/footer') %>

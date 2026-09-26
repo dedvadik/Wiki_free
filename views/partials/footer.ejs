@@ -1,0 +1,23 @@
+<%#
+  ============================================================================
+  partials/footer.ejs — нижняя часть каждой страницы
+  ----------------------------------------------------------------------------
+  Закрывает <main>, выводит подвал с текстом из настроек и подключает скрипты.
+  Параметр scripts (необязательный) — массив дополнительных JS-файлов,
+  например редактор:  include('/partials/footer', { scripts: ['/js/editor.js'] })
+  Все скрипты с defer: выполняются после разбора HTML, не блокируя отрисовку.
+  ============================================================================
+%>
+</main>
+
+<footer class="site-footer">
+  <span><%= site.footer_text %></span>
+</footer>
+
+<script src="/js/app.js?v=<%= assetVersion %>" defer></script>
+<% (locals.scripts || []).forEach((src) => { %>
+  <script src="<%= src %>?v=<%= assetVersion %>" defer></script>
+<% }) %>
+<% if (customAssets.js) { %><script src="/custom.js?v=<%= assetVersion %>" defer></script><% } %>
+</body>
+</html>

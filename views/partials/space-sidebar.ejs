@@ -1,0 +1,29 @@
+<%#
+  ============================================================================
+  partials/space-sidebar.ejs — левая панель пространства (как в Confluence)
+  ----------------------------------------------------------------------------
+  Плашка пространства, кнопка создания страницы и дерево всех страниц.
+  На узких экранах панель скрыта и открывается кнопкой «☰ Страницы».
+  Параметры: space, tree, currentPageId (необяз.), openIds (необяз.)
+  ============================================================================
+%>
+<aside class="sidebar" id="sidebar">
+  <a class="sidebar-space" href="/spaces/<%= space.key %>">
+    <span class="space-icon" style="background: <%= space.color %>"><%= space.icon %></span>
+    <span class="sidebar-space-text">
+      <strong><%= space.name %></strong>
+      <small><%= space.key %></small>
+    </span>
+  </a>
+
+  <% if (can('editor')) { %>
+    <a class="btn btn-block" href="/spaces/<%= space.key %>/pages/new">+ Новая страница</a>
+  <% } %>
+
+  <div class="sidebar-title">Страницы</div>
+  <% if (tree.length) { %>
+    <%- include('/partials/page-tree', { nodes: tree }) %>
+  <% } else { %>
+    <p class="muted small">Здесь пока нет страниц.</p>
+  <% } %>
+</aside>

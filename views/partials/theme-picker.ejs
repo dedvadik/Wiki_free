@@ -1,0 +1,47 @@
+<%#
+  ============================================================================
+  partials/theme-picker.ejs — выбор темы оформления карточками с превью
+  ----------------------------------------------------------------------------
+  Каждая карточка — это <label> с радиокнопкой, поэтому выбор работает без
+  JavaScript. Мини-превью (шапка, боковая панель, карточка с кнопкой)
+  рисуется чистым CSS по цветам из theme.json темы (поле preview), которые
+  передаются через CSS-переменные --tp-*.
+  Ссылка «Предпросмотр» открывает главную страницу с ?theme=<id> в новой
+  вкладке — тема применяется только к ней, ничего не сохраняется.
+
+  Параметры:
+    name          — имя поля формы (theme)
+    selected      — id выбранной темы ('' — «как на сайте»)
+    themes        — список тем из src/services/themes.js
+    defaultOption — (необяз.) подпись варианта «как на сайте» со значением ''
+  ============================================================================
+%>
+<div class="theme-picker" role="radiogroup">
+  <% if (locals.defaultOption) { %>
+    <label class="theme-card theme-card-default">
+      <input type="radio" class="visually-hidden" name="<%= name %>" value="" <%= !selected ? 'checked' : '' %>>
+      <span class="theme-preview theme-preview-default" aria-hidden="true">⚙</span>
+      <span class="theme-card-name">По умолчанию</span>
+      <span class="theme-card-desc"><%= defaultOption %></span>
+    </label>
+  <% } %>
+
+  <% themes.forEach((t) => { const p = t.preview; %>
+    <label class="theme-card">
+      <input type="radio" class="visually-hidden" name="<%= name %>" value="<%= t.id %>" <%= selected === t.id ? 'checked' : '' %>>
+      <span class="theme-preview" aria-hidden="true"
+            style="--tp-bg: <%= p.bg %>; --tp-header: <%= p.header %>; --tp-header-text: <%= p.headerText %>; --tp-sidebar: <%= p.sidebar %>; --tp-card: <%= p.card %>; --tp-text: <%= p.text %>; --tp-accent: <%= p.accent %>; --tp-radius: <%= p.radius %>">
+        <span class="tp-header"><span class="tp-logo"></span><span class="tp-bar"></span><span class="tp-pill"></span></span>
+        <span class="tp-body">
+          <span class="tp-side"><span class="tp-bar"></span><span class="tp-bar"></span><span class="tp-bar short"></span></span>
+          <span class="tp-card"><span class="tp-bar tp-title"></span><span class="tp-bar"></span><span class="tp-bar short"></span><span class="tp-btn"></span></span>
+        </span>
+      </span>
+      <span class="theme-card-name">
+        <%= t.name %><% if (t.source === 'custom') { %> <span class="badge">своя</span><% } %>
+      </span>
+      <% if (t.description) { %><span class="theme-card-desc"><%= t.description %></span><% } %>
+      <a class="theme-card-link" href="/?theme=<%= t.id %>" target="_blank" rel="noopener">Предпросмотр ↗</a>
+    </label>
+  <% }) %>
+</div>

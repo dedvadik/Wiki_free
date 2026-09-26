@@ -1,0 +1,35 @@
+<%#
+  ============================================================================
+  create.ejs — мастер «Создать»: выбор пространства для новой страницы
+  ----------------------------------------------------------------------------
+  Каждое пространство — обычная ссылка на /spaces/КЛЮЧ/pages/new,
+  поэтому страница работает и без JavaScript. Пространство из параметра
+  ?space=КЛЮЧ подсвечивается как выбранное.
+  Переменные: spaces, selected
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'Создать' }) %>
+
+<div class="narrow">
+  <h1>Что создать?</h1>
+
+  <div class="card">
+    <h2 class="card-title">📄 Страницу в пространстве</h2>
+    <div class="choice-list">
+      <% spaces.forEach((s) => { %>
+        <a class="choice <%= s.key === selected ? 'selected' : '' %>" href="/spaces/<%= s.key %>/pages/new">
+          <span class="space-icon" style="background: <%= s.color %>"><%= s.icon %></span>
+          <span><strong><%= s.name %></strong> <span class="muted small"><%= s.key %></span></span>
+        </a>
+      <% }) %>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="card-title">🗂️ Новое пространство</h2>
+    <p class="muted">Отдельный раздел для команды, проекта или темы — со своим деревом страниц.</p>
+    <a class="btn btn-primary" href="/spaces/new">Создать пространство</a>
+  </div>
+</div>
+
+<%- include('/partials/footer') %>

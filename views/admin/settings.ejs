@@ -1,0 +1,44 @@
+<%#
+  ============================================================================
+  admin/settings.ejs — настройки сайта (вкладка «Настройки»)
+  ----------------------------------------------------------------------------
+  Форма строится АВТОМАТИЧЕСКИ по схеме SETTINGS_SCHEMA
+  (src/services/settings.js) — сами поля выводит partials/settings-groups.
+  Добавили настройку в схему — она сама появилась здесь.
+
+  Пресеты тем — кнопки с data-preset (JSON со значениями цветов);
+  public/js/admin.js по клику подставляет значения в поля формы.
+
+  Переменные: groups [{ name, fields }], values (текущие значения), presets,
+              themes (темы оформления для выбора), errors
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'Настройки сайта' }) %>
+
+<div class="container">
+  <h1>Настройки сайта</h1>
+  <%- include('/partials/admin-nav') %>
+  <%- include('/partials/errors') %>
+
+  <form method="post" action="/admin/settings" class="form settings-form" id="settings-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+
+    <%- include('/partials/settings-groups', { groups, values, presets, themes }) %>
+
+    <div class="form-actions sticky-actions">
+      <button class="btn btn-primary" type="submit">Сохранить настройки</button>
+      <span class="muted small">Изменения применяются сразу для всех пользователей.</span>
+    </div>
+  </form>
+
+  <%# Скрытые формы сброса групп (кнопки — внутри partials/settings-groups). %>
+  <% groups.forEach((group, gi) => { %>
+    <form id="reset-<%= gi %>" method="post" action="/admin/settings/reset" hidden
+          data-confirm="Сбросить все настройки раздела «<%= group.name %>» к значениям по умолчанию?">
+      <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+      <input type="hidden" name="group" value="<%= group.name %>">
+    </form>
+  <% }) %>
+</div>
+
+<%- include('/partials/footer', { scripts: ['/js/admin.js'] }) %>

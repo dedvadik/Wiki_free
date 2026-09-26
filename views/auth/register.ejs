@@ -1,0 +1,44 @@
+<%#
+  ============================================================================
+  auth/register.ejs — регистрация нового пользователя
+  Пароль НИКОГДА не возвращается в форму при ошибке (values его не содержит).
+  Переменные: values { username, email, displayName }, errors
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'Регистрация', bodyClass: 'auth-page' }) %>
+
+<div class="auth-card card">
+  <h1>Регистрация</h1>
+  <%- include('/partials/errors') %>
+
+  <form method="post" action="/register" class="form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+    <div class="field">
+      <label for="display_name">Имя</label>
+      <input id="display_name" name="display_name" value="<%= values.displayName || '' %>" required maxlength="100" autocomplete="name" placeholder="Иван Петров" autofocus>
+    </div>
+    <div class="field">
+      <label for="username">Логин</label>
+      <input id="username" name="username" value="<%= values.username || '' %>" required pattern="[a-zA-Z0-9_.\-]{3,50}" autocomplete="username" placeholder="ivan.petrov">
+      <p class="help">Латиница, цифры и _ . - (3–50 символов)</p>
+    </div>
+    <div class="field">
+      <label for="email">Email</label>
+      <input id="email" type="email" name="email" value="<%= values.email || '' %>" required autocomplete="email">
+    </div>
+    <div class="field">
+      <label for="password">Пароль</label>
+      <input id="password" type="password" name="password" required minlength="8" autocomplete="new-password">
+      <p class="help">Не короче 8 символов</p>
+    </div>
+    <div class="field">
+      <label for="password_confirm">Повторите пароль</label>
+      <input id="password_confirm" type="password" name="password_confirm" required minlength="8" autocomplete="new-password">
+    </div>
+    <button class="btn btn-primary btn-block" type="submit">Создать учётную запись</button>
+  </form>
+
+  <p class="auth-switch">Уже есть учётная запись? <a href="/login">Войти</a></p>
+</div>
+
+<%- include('/partials/footer') %>

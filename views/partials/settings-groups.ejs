@@ -1,0 +1,106 @@
+<%#
+  ============================================================================
+  partials/settings-groups.ejs — поля настроек, построенные по схеме
+  ----------------------------------------------------------------------------
+  Общий кусок для вкладок «Настройки» и «LDAP». Для каждого поля схемы
+  (src/services/settings.js) выбирается элемент ввода по его типу.
+  Кнопка «Сбросить раздел» каждой группы отправляет отдельную скрытую форму
+  reset-<номер> через атрибут form (вложенные формы в HTML запрещены) —
+  сами скрытые формы выводит вызывающий шаблон.
+
+  Параметры:
+    groups      — [{ name, fields }]
+    values      — текущие значения { ключ: значение }
+    presets     — цветовые пресеты (необяз., выводятся в группе с цветами)
+    secretsSet  — { ключ: true } для уже сохранённых паролей (необяз.)
+    themes      — список тем для поля типа 'theme' (необяз.)
+  ============================================================================
+%>
+<% groups.forEach((group, gi) => { %>
+  <fieldset class="card settings-group">
+    <legend><%= group.name %></legend>
+
+    <%# Для группы с цветами — быстрые цветовые пресеты (поверх темы).
+        Пресет с пустыми значениями («Цвета темы») очищает поля. %>
+    <% if (locals.presets && group.fields.some((f) => f.key === 'primary_color')) { %>
+      <div class="presets">
+        <span class="muted small">Цветовые пресеты:</span>
+        <% presets.forEach((p) => { %>
+          <button type="button" class="preset" data-preset="<%= JSON.stringify(p.values) %>">
+            <% if (p.values.header_bg) { %>
+              <span class="preset-swatch" style="background: <%= p.values.header_bg %>; border-color: <%= p.values.primary_color %>"></span>
+            <% } else { %>
+              <span class="preset-swatch preset-swatch-theme"></span>
+            <% } %>
+            <%= p.name %>
+          </button>
+        <% }) %>
+      </div>
+    <% } %>
+
+    <% group.fields.forEach((f) => { const v = values[f.key]; %>
+      <div class="field <%= f.type === 'bool' ? 'field-check' : '' %>">
+        <% if (f.type === 'bool') { %>
+          <label><input type="checkbox" name="<%= f.key %>" <%= v === true || v === 'on' ? 'checked' : '' %>> <%= f.label %></label>
+
+        <% } else { %>
+          <label for="s-<%= f.key %>"><%= f.label %></label>
+
+          <% if (f.type === 'select') { %>
+            <select id="s-<%= f.key %>" name="<%= f.key %>">
+              <% f.options.forEach(([optValue, optLabel]) => { %>
+                <option value="<%= optValue %>" <%= optValue === v ? 'selected' : '' %>><%= optLabel %></option>
+              <% }) %>
+            </select>
+
+          <% } else if (f.type === 'theme') { %>
+            <%# Выбор темы оформления карточками (список тем — из реестра). %>
+            <%- include('/partials/theme-picker', { name: f.key, selected: v, themes }) %>
+
+          <% } else if (f.type === 'color' && f.optional) { %>
+            <%# Необязательный цвет: текстовое поле (его значение и отправляется;
+                пусто = «как в теме») + палитра для удобного выбора.
+                Синхронизацию палитры и текста выполняет public/js/admin.js. %>
+            <div class="color-field">
+              <input type="color" value="<%= v || '#888888' %>" data-color-for="s-<%= f.key %>" aria-label="Палитра">
+              <input type="text" id="s-<%= f.key %>" name="<%= f.key %>" value="<%= v %>" placeholder="как в теме"
+                     class="color-text mono" maxlength="7" spellcheck="false" autocomplete="off">
+              <button type="button" class="link-btn small" data-color-clear="s-<%= f.key %>">как в теме</button>
+            </div>
+
+          <% } else if (f.type === 'color') { %>
+            <div class="color-field">
+              <input type="color" id="s-<%= f.key %>" name="<%= f.key %>" value="<%= v %>">
+              <code data-color-value-for="s-<%= f.key %>"><%= v %></code>
+            </div>
+
+          <% } else if (f.type === 'number') { %>
+            <input type="number" id="s-<%= f.key %>" name="<%= f.key %>" value="<%= v %>" min="<%= f.min %>" max="<%= f.max %>">
+
+          <% } else if (f.type === 'secret') { %>
+            <%# Пароль НИКОГДА не выводится в HTML: поле всегда пустое,
+                а подсказка сообщает, сохранён ли он. autocomplete=new-password
+                не даёт браузеру подставить сюда пароль администратора. %>
+            <% const isSet = locals.secretsSet && secretsSet[f.key]; %>
+            <input type="password" id="s-<%= f.key %>" name="<%= f.key %>" value="" autocomplete="new-password"
+                   placeholder="<%= isSet ? '•••••••• сохранён — оставьте пустым, чтобы не менять' : 'не задан' %>">
+
+          <% } else if (['textarea', 'markdown', 'code'].includes(f.type)) { %>
+            <textarea id="s-<%= f.key %>" name="<%= f.key %>" rows="<%= { textarea: 3, markdown: 6, code: 8 }[f.type] %>"
+                      class="<%= f.type === 'code' ? 'mono' : '' %>" spellcheck="<%= f.type === 'code' ? 'false' : 'true' %>">
+<%= v %></textarea>
+
+          <% } else { %>
+            <input type="text" id="s-<%= f.key %>" name="<%= f.key %>" value="<%= v %>" spellcheck="false">
+          <% } %>
+        <% } %>
+
+        <% if (f.help) { %><p class="help"><%= f.help %></p><% } %>
+      </div>
+    <% }) %>
+
+    <div class="settings-group-actions">
+      <button type="submit" class="link-btn" form="reset-<%= gi %>">Сбросить раздел к умолчаниям</button>
+    </div>
+  </fieldset>
+<% }) %>

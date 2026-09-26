@@ -1,0 +1,83 @@
+<%#
+  ============================================================================
+  home.ejs — главная страница (дашборд)
+  ----------------------------------------------------------------------------
+  Слева: приветствие (Markdown из настроек) и лента недавних изменений.
+  Справа: избранное пользователя и список пространств.
+  Переменные: welcomeHtml, recent, spaces, favorites.
+  ============================================================================
+%>
+<%- include('/partials/header', { title: null }) %>
+
+<div class="dashboard">
+  <section class="dashboard-main">
+    <%# Приветствие: HTML уже очищен на сервере, поэтому выводится без экранирования. %>
+    <div class="card welcome markdown-body"><%- welcomeHtml %></div>
+
+    <div class="card">
+      <h2 class="card-title">Недавние изменения</h2>
+      <% if (!recent.length) { %>
+        <p class="muted">Пока ничего нет.
+          <% if (can('editor')) { %><a href="/spaces/new">Создайте первое пространство</a>.<% } %>
+        </p>
+      <% } else { %>
+        <ul class="list">
+          <% recent.forEach((p) => { %>
+            <li class="list-item">
+              <span class="list-icon"><%= p.space_icon %></span>
+              <div class="list-body">
+                <a class="list-title" href="<%= pageUrl(p) %>"><%= p.title %></a>
+                <div class="list-meta">
+                  <a href="/spaces/<%= p.space_key %>"><%= p.space_name %></a>
+                  · <%= authorName(p.updated_by_name) %>
+                  · <span title="<%= formatDateTime(p.updated_at) %>"><%= timeAgo(p.updated_at) %></span>
+                  · v<%= p.version %>
+                </div>
+              </div>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </div>
+  </section>
+
+  <aside class="dashboard-side">
+    <% if (currentUser) { %>
+      <div class="card">
+        <h2 class="card-title">★ Избранное</h2>
+        <% if (!favorites.length) { %>
+          <p class="muted small">Нажмите «☆ В избранное» на любой странице, чтобы она появилась здесь.</p>
+        <% } else { %>
+          <ul class="compact-list">
+            <% favorites.forEach((f) => { %>
+              <li><span><%= f.space_icon %></span> <a href="<%= pageUrl(f) %>"><%= f.title %></a></li>
+            <% }) %>
+          </ul>
+        <% } %>
+      </div>
+    <% } %>
+
+    <div class="card">
+      <div class="card-title-row">
+        <h2 class="card-title">Пространства</h2>
+        <a class="small" href="/spaces">Все →</a>
+      </div>
+      <% if (!spaces.length) { %>
+        <p class="muted small">Пространств пока нет.</p>
+      <% } else { %>
+        <ul class="compact-list">
+          <% spaces.forEach((s) => { %>
+            <li>
+              <span class="space-icon space-icon-sm" style="background: <%= s.color %>"><%= s.icon %></span>
+              <a href="/spaces/<%= s.key %>"><%= s.name %></a>
+              <span class="muted small"><%= s.page_count %></span>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+      <% if (can('editor')) { %><a class="btn btn-block" href="/spaces/new">+ Создать пространство</a><% } %>
+    </div>
+  </aside>
+</div>
+
+<%- include('/partials/footer') %>

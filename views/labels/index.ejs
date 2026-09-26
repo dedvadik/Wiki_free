@@ -1,0 +1,22 @@
+<%#
+  labels/index.ejs — «облако» всех меток. Размер шрифта метки растёт вместе
+  с количеством страниц (логарифмически, чтобы популярные не были огромными).
+  Переменные: labels [{ name, page_count }]
+%>
+<%- include('/partials/header', { title: 'Метки' }) %>
+
+<div class="container">
+  <h1>Метки</h1>
+  <% if (!labels.length) { %>
+    <p class="muted">Меток пока нет. Добавьте их в поле «Метки» при редактировании страницы.</p>
+  <% } else { %>
+    <div class="label-cloud">
+      <% labels.forEach((l) => { %>
+        <a class="label-chip" style="font-size: <%= (0.85 + Math.log2(l.page_count + 1) * 0.15).toFixed(2) %>rem"
+           href="/labels/<%= encodeURIComponent(l.name) %>">#<%= l.name %> <span class="muted"><%= l.page_count %></span></a>
+      <% }) %>
+    </div>
+  <% } %>
+</div>
+
+<%- include('/partials/footer') %>

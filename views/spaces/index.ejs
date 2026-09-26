@@ -1,0 +1,43 @@
+<%#
+  ============================================================================
+  spaces/index.ejs — каталог всех пространств в виде карточек
+  Переменные: spaces [{ key, name, icon, color, excerpt, page_count, last_update }]
+  ============================================================================
+%>
+<%- include('/partials/header', { title: 'Пространства' }) %>
+
+<div class="page-heading">
+  <h1>Пространства</h1>
+  <% if (can('editor')) { %><a class="btn btn-primary" href="/spaces/new">+ Создать пространство</a><% } %>
+</div>
+
+<% if (!spaces.length) { %>
+  <div class="empty-state">
+    <div class="empty-icon">🗂️</div>
+    <p>Пространств пока нет. Пространство — это раздел базы знаний: для команды, проекта или темы.</p>
+    <% if (can('editor')) { %><a class="btn btn-primary" href="/spaces/new">Создать первое пространство</a><% } %>
+  </div>
+<% } else { %>
+  <div class="card-grid">
+    <% spaces.forEach((s) => { %>
+      <a class="card space-card" href="/spaces/<%= s.key %>">
+        <%# Цветная полоса сверху карточки — цвет пространства. %>
+        <span class="space-card-stripe" style="background: <%= s.color %>"></span>
+        <div class="space-card-head">
+          <span class="space-icon" style="background: <%= s.color %>"><%= s.icon %></span>
+          <div>
+            <div class="space-card-name"><%= s.name %></div>
+            <div class="muted small"><%= s.key %></div>
+          </div>
+        </div>
+        <p class="space-card-desc"><%= s.excerpt || 'Без описания' %></p>
+        <div class="muted small">
+          <%= plural(s.page_count, 'страница', 'страницы', 'страниц') %>
+          <% if (s.last_update) { %>· обновлено <%= timeAgo(s.last_update) %><% } %>
+        </div>
+      </a>
+    <% }) %>
+  </div>
+<% } %>
+
+<%- include('/partials/footer') %>

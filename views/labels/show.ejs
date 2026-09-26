@@ -1,0 +1,26 @@
+<%#
+  labels/show.ejs — все страницы с конкретной меткой (из любых пространств).
+  Переменные: name, pages [{ id, title, excerpt, updated_at, space_* }]
+%>
+<%- include('/partials/header', { title: `Метка: ${name}` }) %>
+
+<div class="container">
+  <nav class="breadcrumbs"><a href="/labels">Метки</a><span class="sep">›</span><span>#<%= name %></span></nav>
+  <h1>#<%= name %></h1>
+
+  <% if (!pages.length) { %>
+    <p class="muted">Нет страниц с этой меткой.</p>
+  <% } else { %>
+    <ul class="search-results">
+      <% pages.forEach((p) => { %>
+        <li class="search-result">
+          <a class="search-title" href="<%= pageUrl(p) %>"><%= p.title %></a>
+          <div class="muted small"><%= p.space_icon %> <%= p.space_name %> · <%= timeAgo(p.updated_at) %></div>
+          <% if (p.excerpt) { %><p class="search-snippet"><%= p.excerpt %></p><% } %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</div>
+
+<%- include('/partials/footer') %>

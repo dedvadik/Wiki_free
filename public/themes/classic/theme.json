@@ -1,0 +1,15 @@
+{
+  "name": "Классическая",
+  "description": "Стиль Confluence: синяя шапка, строгие карточки. Тема по умолчанию.",
+  "author": "WikiSpace",
+  "preview": {
+    "bg": "#ffffff",
+    "header": "#0747a6",
+    "headerText": "#ffffff",
+    "sidebar": "#f4f5f7",
+    "card": "#ffffff",
+    "text": "#172b4d",
+    "accent": "#0052cc",
+    "radius": 4
+  }
+}

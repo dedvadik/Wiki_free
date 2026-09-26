@@ -1,0 +1,23 @@
+<%#
+  Пример переопределения шаблона. Скопируйте в custom/views/partials/footer.ejs
+  и перезапустите приложение — подвал на всех страницах заменится этим.
+  Доступны те же переменные, что и в оригинале (site, currentUser, ...).
+  ВАЖНО: файл должен закрывать </main>, </body> и </html> и подключать
+  скрипты — как оригинальный views/partials/footer.ejs.
+%>
+</main>
+
+<footer class="site-footer">
+  <span><%= site.footer_text %></span>
+  · <a href="/spaces">Все пространства</a>
+  · <a href="mailto:support@example.com">Поддержка</a>
+  <% if (currentUser) { %>· Вы вошли как <b><%= currentUser.display_name %></b><% } %>
+</footer>
+
+<script src="/js/app.js?v=<%= assetVersion %>" defer></script>
+<% (locals.scripts || []).forEach((src) => { %>
+  <script src="<%= src %>?v=<%= assetVersion %>" defer></script>
+<% }) %>
+<% if (customAssets.js) { %><script src="/custom.js?v=<%= assetVersion %>" defer></script><% } %>
+</body>
+</html>

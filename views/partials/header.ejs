@@ -1,0 +1,117 @@
+<%#
+  ============================================================================
+  partials/header.ejs — верхняя часть КАЖДОЙ страницы сайта
+  ----------------------------------------------------------------------------
+  Подключение в шаблоне:   include('/partials/header', { title: 'Заголовок' })
+  Закрывающая часть — partials/footer.ejs (закрывает <main>, <body>, <html>).
+
+  Содержит:
+   - <head>: кодировка, адаптивность, заголовок вкладки, стили;
+   - верхнюю панель: логотип, навигация, поиск, кнопка «Создать»,
+     переключатель темы, меню пользователя (или кнопки входа);
+   - баннер-объявление из настроек и flash-уведомления.
+
+  Необязательные параметры: title, bodyClass, createUrl (куда ведёт «+ Создать»).
+  Остальные переменные глобальны (res.locals): site (настройки сайта), currentUser, can(),
+  csrfToken(), consumeFlashes(), customAssets, assetVersion, themeVersion,
+  activeTheme (выбранная тема оформления), themePreview (идёт предпросмотр темы).
+
+  Атрибуты <html>:
+    data-default-mode — светлый/тёмный режим по умолчанию (читает theme-init.js);
+    data-ui-theme     — id активной темы; удобно для custom.css:
+                        :root[data-ui-theme="icloud"] .topbar { … }
+
+  Чтобы изменить шапку под себя — скопируйте файл в custom/views/partials/.
+  ============================================================================
+%>
+<!DOCTYPE html>
+<html lang="ru" data-default-mode="<%= site.default_theme %>" data-ui-theme="<%= activeTheme.id %>">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= locals.title ? `${title} · ${site.site_name}` : site.site_name %></title>
+  <meta name="description" content="<%= site.site_tagline %>">
+  <%# CSRF-токен для JavaScript (fetch в редакторе) — только для вошедших. %>
+  <% if (currentUser) { %><meta name="csrf-token" content="<%= csrfToken() %>"><% } %>
+  <link rel="icon" href="<%= site.favicon_url || '/img/favicon.svg' %>">
+  <%# theme-init.js грузится СИНХРОННО до стилей: он выставляет светлый/тёмный
+      режим до первой отрисовки, чтобы страница не «моргала» белым. %>
+  <script src="/js/theme-init.js?v=<%= assetVersion %>"></script>
+  <%# Порядок стилей важен (каждый следующий переопределяет предыдущий):
+      базовые стили → тема оформления → цвета из админки → custom.css. %>
+  <link rel="stylesheet" href="/css/app.css?v=<%= assetVersion %>">
+  <% if (activeTheme.stylesheet) { %><link rel="stylesheet" href="<%= activeTheme.stylesheet %>?v=<%= assetVersion %>"><% } %>
+  <link rel="stylesheet" href="/theme.css?v=<%= themeVersion %>">
+  <% if (customAssets.css) { %><link rel="stylesheet" href="/custom.css?v=<%= assetVersion %>"><% } %>
+</head>
+<body class="<%= locals.bodyClass || '' %>">
+
+<%# ---------------------------- Верхняя панель ---------------------------- %>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <img class="brand-logo" src="<%= site.logo_url || '/img/logo.svg' %>" alt="">
+      <span class="brand-name"><%= site.site_name %></span>
+    </a>
+
+    <nav class="topnav" aria-label="Основная навигация">
+      <a href="/spaces" class="<%= currentPath.startsWith('/spaces') ? 'active' : '' %>">Пространства</a>
+      <a href="/labels" class="<%= currentPath.startsWith('/labels') ? 'active' : '' %>">Метки</a>
+    </nav>
+
+    <form class="search-box" action="/search" method="get" role="search">
+      <input type="search" name="q" placeholder="Поиск по статьям…" value="<%= searchQuery %>" aria-label="Поиск">
+    </form>
+
+    <div class="topbar-actions">
+      <% if (can('editor')) { %>
+        <a class="btn btn-create" href="<%= locals.createUrl || '/create' %>">+ Создать</a>
+      <% } %>
+      <button type="button" class="icon-btn" data-action="toggle-theme" title="Светлый / тёмный режим" aria-label="Переключить светлый или тёмный режим">◐</button>
+
+      <% if (currentUser) { %>
+        <%# Выпадающее меню на <details>: работает даже без JavaScript. %>
+        <details class="dropdown user-menu">
+          <summary class="avatar" title="<%= currentUser.display_name %>"><%= initials(currentUser.display_name) %></summary>
+          <div class="menu menu-right">
+            <div class="menu-header">
+              <strong><%= currentUser.display_name %></strong>
+              <small>@<%= currentUser.username %> · <%= roleNames[currentUser.role] %></small>
+            </div>
+            <a href="/profile">Профиль</a>
+            <% if (site.allow_user_themes) { %><a href="/profile#theme">Тема оформления</a><% } %>
+            <% if (can('admin')) { %><a href="/admin">Администрирование</a><% } %>
+            <form method="post" action="/logout">
+              <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+              <button type="submit">Выйти</button>
+            </form>
+          </div>
+        </details>
+      <% } else { %>
+        <a href="/login" class="btn btn-on-header">Войти</a>
+        <% if (site.allow_registration) { %><a href="/register" class="btn btn-create">Регистрация</a><% } %>
+      <% } %>
+    </div>
+  </div>
+</header>
+
+<% if (site.announcement) { %>
+  <div class="announcement" role="status"><%= site.announcement %></div>
+<% } %>
+
+<%# Предпросмотр темы (?theme=<id>): тема применена только к этой странице. %>
+<% if (themePreview) { %>
+  <div class="announcement theme-preview-banner" role="status">
+    Предпросмотр темы «<%= activeTheme.name %>» — применена только к этой странице.
+    <% if (currentUser && site.allow_user_themes) { %><a href="/profile#theme">Выбрать в профиле</a> ·<% } %>
+    <a href="<%= currentPath %>">Закрыть предпросмотр</a>
+  </div>
+<% } %>
+
+<main class="main">
+<%# ------------------------ Flash-уведомления ------------------------------ %>
+<% const flashes = consumeFlashes(); if (flashes.length) { %>
+  <div class="flashes">
+    <% flashes.forEach((f) => { %><div class="flash flash-<%= f.type %>"><%= f.message %></div><% }) %>
+  </div>
+<% } %>
