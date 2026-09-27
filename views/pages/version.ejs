@@ -30,7 +30,7 @@
       <% if (version.version > 1) { %>
         <a class="btn btn-sm" href="/pages/<%= page.id %>/diff?from=<%= version.version - 1 %>&to=<%= version.version %>">Что изменилось</a>
       <% } %>
-      <% if (version.version !== page.version && can('editor')) { %>
+      <% if (version.version !== page.version && access.canEdit) { %>
         <form method="post" action="/pages/<%= page.id %>/versions/<%= version.version %>/restore" class="inline"
               data-confirm="Восстановить эту версию?">
           <input type="hidden" name="_csrf" value="<%= csrfToken() %>">

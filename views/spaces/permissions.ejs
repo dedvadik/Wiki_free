@@ -1,0 +1,173 @@
+<%#
+  ============================================================================
+  spaces/permissions.ejs — «Права доступа» пространства
+  ----------------------------------------------------------------------------
+  Доступна владельцу пространства и администраторам. Блоки:
+   1. Сводка — кто сейчас может читать и править (словами).
+   2. Форма режимов: кто читает (открытое/закрытое), кто правит (все
+      редакторы / только участники), владелец (передача владения).
+   3. Участники: уровень «Чтение» или «Редактирование», смена и удаление.
+      «Редактирование» доступно только пользователям с ролью «Редактор»
+      и выше — у читателей этот вариант заблокирован.
+   4. Добавление участника по логину или email (подсказки — datalist).
+  Каждая строка участника — отдельные формы (вложенные формы запрещены).
+  Переменные: space, owner, members, users, candidates, errors,
+              visibilityOptions, editPolicyOptions, accessLevels, canChangeOwner
+  ============================================================================
+%>
+<% const editors = members.filter((m) => m.access === 'edit' && ['editor', 'admin'].includes(m.role)).length; %>
+<%- include('/partials/header', { title: `Права доступа: ${space.name}` }) %>
+
+<div class="container permissions-page">
+  <nav class="breadcrumbs">
+    <a href="/spaces/<%= space.key %>"><%= space.icon %> <%= space.name %></a>
+    <span class="sep">›</span><span>Права доступа</span>
+  </nav>
+
+  <header class="settings-header">
+    <h1>Права доступа</h1>
+    <p>Кто может читать и править пространство «<%= space.name %>». Администраторы сайта всегда имеют полный доступ.</p>
+  </header>
+
+  <%- include('/partials/errors') %>
+
+  <%# ------------------------------ Сводка -------------------------------- %>
+  <div class="card settings-card">
+    <div class="settings-row">
+      <span class="settings-tile" style="--tile: #34c759"><%- icon('file-text') %></span>
+      <div class="grow"><strong>Читать</strong>
+        <span class="muted small">
+          <% if (space.visibility === 'public') { %>все, кому доступен сайт
+          <% } else { %>только владелец, <%= plural(members.length, 'участник', 'участника', 'участников') %> и администраторы<% } %>
+        </span>
+      </div>
+    </div>
+    <div class="settings-row">
+      <span class="settings-tile" style="--tile: #ff9500"><%- icon('edit') %></span>
+      <div class="grow"><strong>Править статьи</strong>
+        <span class="muted small">
+          <% if (space.edit_policy === 'editors') { %>все пользователи с ролью «Редактор», которые видят пространство
+          <% } else { %>владелец, <%= plural(editors, 'участник', 'участника', 'участников') %> с правом редактирования и администраторы<% } %>
+        </span>
+      </div>
+    </div>
+    <div class="settings-row">
+      <span class="settings-tile" style="--tile: #5856d6"><%- icon('key') %></span>
+      <div class="grow"><strong>Управлять правами</strong>
+        <span class="muted small">владелец<% if (owner) { %> (<%= owner.display_name %>)<% } else { %> не назначен<% } %> и администраторы</span>
+      </div>
+    </div>
+  </div>
+
+  <%# ---------------------- Режимы доступа и владелец ---------------------- %>
+  <form method="post" action="/spaces/<%= space.key %>/permissions" class="card settings-card form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+
+    <h2 class="settings-card-title"><%- icon('file-text') %> Кто может читать</h2>
+    <div class="option-cards" role="radiogroup">
+      <% Object.entries(visibilityOptions).forEach(([value, opt]) => { %>
+        <label class="option-card">
+          <input type="radio" class="visually-hidden" name="visibility" value="<%= value %>" <%= space.visibility === value ? 'checked' : '' %>>
+          <span class="option-card-title"><%- icon(value === 'restricted' ? 'lock' : 'globe') %> <%= opt.label %></span>
+          <span class="option-card-desc"><%= opt.description %></span>
+        </label>
+      <% }) %>
+    </div>
+
+    <h2 class="settings-card-title settings-card-title-spaced"><%- icon('edit') %> Кто может править статьи</h2>
+    <div class="option-cards" role="radiogroup">
+      <% Object.entries(editPolicyOptions).forEach(([value, opt]) => { %>
+        <label class="option-card">
+          <input type="radio" class="visually-hidden" name="edit_policy" value="<%= value %>" <%= space.edit_policy === value ? 'checked' : '' %>>
+          <span class="option-card-title"><%- icon(value === 'members' ? 'users' : 'edit') %> <%= opt.label %></span>
+          <span class="option-card-desc"><%= opt.description %></span>
+        </label>
+      <% }) %>
+    </div>
+    <p class="help">Читатели (глобальная роль) правят статьи в любом случае не могут — только читают и комментируют.</p>
+
+    <h2 class="settings-card-title settings-card-title-spaced"><%- icon('key') %> Владелец</h2>
+    <% if (canChangeOwner) { %>
+      <div class="field">
+        <select name="owner_id" aria-label="Владелец пространства">
+          <% if (!owner) { %><option value="">— не назначен —</option><% } %>
+          <% users.forEach((u) => { %>
+            <option value="<%= u.id %>" <%= owner && owner.id === u.id ? 'selected' : '' %>><%= u.display_name %> (@<%= u.username %>, <%= roleNames[u.role] %>)</option>
+          <% }) %>
+        </select>
+        <p class="help">Владелец управляет правами и настройками пространства. Передав владение, вы потеряете эту возможность (если вы не администратор).</p>
+      </div>
+    <% } %>
+
+    <div class="settings-card-actions">
+      <button class="btn btn-primary" type="submit">Сохранить</button>
+    </div>
+  </form>
+
+  <%# ------------------------------ Участники ------------------------------ %>
+  <div class="card settings-card">
+    <h2 class="settings-card-title"><%- icon('users') %> Участники <span class="badge"><%= members.length %></span></h2>
+    <% if (!members.length) { %>
+      <p class="muted">
+        Участников пока нет.
+        <% if (space.visibility === 'restricted') { %>Пространство закрыто — его видят только владелец и администраторы.<% } %>
+      </p>
+    <% } else { %>
+      <div class="settings-links">
+        <% members.forEach((m) => { const isViewer = !['editor', 'admin'].includes(m.role); %>
+          <div class="settings-row member-row <%= m.is_active ? '' : 'row-disabled' %>">
+            <span class="avatar avatar-md" style="--avatar-h: <%= avatarHue(m.display_name) %>"><%= initials(m.display_name) %></span>
+            <span class="grow user-row-main">
+              <strong><%= m.display_name %></strong>
+              <span class="muted small">@<%= m.username %> · <%= roleNames[m.role] %><% if (m.added_by_name) { %> · добавил(а) <%= m.added_by_name %><% } %></span>
+              <% if (isViewer && m.access === 'edit') { %><span class="help warn">Роль «Читатель» — право редактирования не действует</span><% } %>
+            </span>
+            <form method="post" action="/spaces/<%= space.key %>/members" class="member-access">
+              <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+              <input type="hidden" name="login" value="<%= m.username %>">
+              <select name="access" aria-label="Доступ <%= m.display_name %>">
+                <% Object.entries(accessLevels).forEach(([value, label]) => { %>
+                  <option value="<%= value %>" <%= m.access === value ? 'selected' : '' %> <%= value === 'edit' && isViewer ? 'disabled' : '' %>><%= label %></option>
+                <% }) %>
+              </select>
+              <button class="btn btn-sm" type="submit">Изменить</button>
+            </form>
+            <form method="post" action="/spaces/<%= space.key %>/members/<%= m.id %>/delete"
+                  data-confirm="Убрать <%= m.display_name %> из участников пространства?">
+              <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+              <button class="link-btn danger small" type="submit">убрать</button>
+            </form>
+          </div>
+        <% }) %>
+      </div>
+    <% } %>
+  </div>
+
+  <%# -------------------------- Добавить участника ------------------------- %>
+  <form method="post" action="/spaces/<%= space.key %>/members" class="card settings-card form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
+    <h2 class="settings-card-title"><%- icon('user') %> Добавить участника</h2>
+    <div class="field-row">
+      <div class="field grow">
+        <label for="member-login">Логин или email</label>
+        <input id="member-login" name="login" list="member-candidates" required autocomplete="off" placeholder="ivan.petrov">
+        <%# Подсказки при вводе: активные пользователи, ещё не участники. %>
+        <datalist id="member-candidates">
+          <% candidates.forEach((u) => { %><option value="<%= u.username %>"><%= u.display_name %> · <%= roleNames[u.role] %></option><% }) %>
+        </datalist>
+      </div>
+      <div class="field">
+        <label for="member-access">Доступ</label>
+        <select id="member-access" name="access">
+          <% Object.entries(accessLevels).forEach(([value, label]) => { %><option value="<%= value %>"><%= label %></option><% }) %>
+        </select>
+      </div>
+      <div class="field">
+        <button class="btn btn-primary" type="submit">Добавить</button>
+      </div>
+    </div>
+    <p class="help">«Чтение» — видеть закрытое пространство и комментировать. «Редактирование» — ещё и править статьи (только для пользователей с ролью «Редактор»).</p>
+  </form>
+</div>
+
+<%- include('/partials/footer') %>

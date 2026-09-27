@@ -88,11 +88,13 @@ export async function importDocs() {
   const stats = { created: 0, updated: 0, unchanged: 0 };
 
   await transaction(async (db) => {
-    /* ---- Пространство: создаём или обновляем описание ---- */
+    /* ---- Пространство: создаём или обновляем описание ----
+     * Владелец (управляет правами) — автор импорта; у существующего
+     * пространства владелец и настройки доступа НЕ меняются. */
     const s = manifest.space;
     const { rows: [space] } = await db.query(
-      `INSERT INTO spaces (key, name, description, icon, color, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO spaces (key, name, description, icon, color, created_by, owner_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $6)
        ON CONFLICT (key) DO UPDATE
          SET name = EXCLUDED.name, description = EXCLUDED.description,
              icon = EXCLUDED.icon, color = EXCLUDED.color, updated_at = now()

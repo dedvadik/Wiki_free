@@ -4,11 +4,22 @@
   ----------------------------------------------------------------------------
   Устройство:
    - поле заголовка;
-   - панель инструментов: кнопки с data-md="действие" — обработку выполняет
-     public/js/editor.js (вставка Markdown-разметки, загрузка файлов);
-   - рабочая область с тремя режимами (data-mode): только текст,
-     разделённый экран (текст + предпросмотр), только предпросмотр;
+   - переключатель типа редактора «Визуальный / Markdown» (data-editor-type);
+   - панель инструментов: кнопки с data-md="действие" — одни и те же для
+     обоих типов, обработку выполняет public/js/editor.js (в Markdown —
+     вставка разметки, в визуальном — форматирование как в Word);
+   - рабочая область:
+       Markdown   — textarea + предпросмотр, три вида (data-mode): текст,
+                    текст и предпросмотр, только предпросмотр;
+       визуальный — редактируемая область (contenteditable), выглядит так же,
+                    как готовая статья;
    - свойства: родительская страница, порядок, метки, комментарий к версии.
+
+  Страница ВСЕГДА хранится в Markdown: визуальный редактор получает HTML с
+  сервера (/api/preview), а при сохранении превращает результат обратно в
+  Markdown (библиотека turndown). Поэтому история версий, сравнение, поиск и
+  экспорт одинаково работают для страниц, написанных в любом режиме.
+  Без JavaScript доступен только Markdown (textarea) — форма всё равно работает.
 
   Скрытые поля:
    - _csrf           — защита от CSRF;
@@ -26,7 +37,7 @@
 
 <form method="post"
       action="<%= isNew ? `/spaces/${space.key}/pages` : `/pages/${page.id}` %>"
-      class="editor-form" data-editor-form data-page-id="<%= isNew ? '' : page.id %>">
+      class="editor-form" data-editor-form data-page-id="<%= isNew ? '' : page.id %>" data-editor-type="markdown">
   <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
   <% if (!isNew) { %><input type="hidden" name="base_version" value="<%= baseVersion %>"><% } %>
   <input type="hidden" name="attachment_ids" value="" data-editor-attachments>
@@ -53,7 +64,13 @@
 
   <%# ------------------------- Панель инструментов ---------------------- %>
   <div class="editor-toolbar" role="toolbar" aria-label="Форматирование">
+    <%# Тип редактора. Скрыт, пока editor.js не загрузился (без JS — только Markdown). %>
+    <div class="editor-type-switch" role="group" aria-label="Тип редактора" data-editor-type-switch hidden>
+      <button type="button" data-editor-type-choice="visual" title="Как в Word: форматирование видно сразу">Визуальный</button>
+      <button type="button" data-editor-type-choice="markdown" title="Текстовая разметка Markdown">Markdown</button>
+    </div>
     <div class="tool-group">
+      <button type="button" data-md="paragraph" title="Обычный текст" class="visual-only">¶</button>
       <button type="button" data-md="h2" title="Заголовок 2">H2</button>
       <button type="button" data-md="h3" title="Заголовок 3">H3</button>
     </div>
@@ -73,6 +90,9 @@
     <div class="tool-group">
       <button type="button" data-md="codeblock" title="Блок кода">{ }</button>
       <button type="button" data-md="table" title="Таблица">▦</button>
+      <%# Добавление строки/столбца в таблицу, где стоит курсор (только визуальный режим). %>
+      <button type="button" data-md="row" title="Добавить строку в таблицу" class="visual-only">+▤</button>
+      <button type="button" data-md="col" title="Добавить столбец в таблицу" class="visual-only">+▥</button>
       <button type="button" data-md="hr" title="Горизонтальная линия">―</button>
       <button type="button" data-md="upload" title="Вставить файл или картинку">📎</button>
     </div>
@@ -85,7 +105,7 @@
       <button type="button" data-md="toc" title="Оглавление">☰</button>
     </div>
     <div class="toolbar-spacer"></div>
-    <div class="view-switch" role="group" aria-label="Режим просмотра">
+    <div class="view-switch markdown-only" role="group" aria-label="Режим просмотра">
       <button type="button" data-view="edit">Текст</button>
       <button type="button" data-view="split">Оба</button>
       <button type="button" data-view="preview">Просмотр</button>
@@ -96,11 +116,16 @@
       Перенос строки сразу после <textarea> намеренный: браузер отбрасывает
       первый перевод строки, и так текст, начинающийся с пустой строки,
       не потеряет её. %>
-  <div class="editor-workspace" data-mode="split">
+  <div class="editor-workspace" data-mode="split" data-type="markdown">
     <textarea name="content" data-editor-input spellcheck="true"
               placeholder="Пишите в формате Markdown. Картинки можно вставить из буфера (Ctrl+V) или перетащить сюда.">
 <%= form.content %></textarea>
     <div class="editor-preview markdown-body" data-editor-preview aria-live="polite"></div>
+    <%# Визуальный редактор: класс markdown-body — те же стили, что у готовой
+        статьи, поэтому «что видишь, то и получишь». %>
+    <div class="editor-visual markdown-body" data-editor-visual contenteditable="true" spellcheck="true"
+         role="textbox" aria-multiline="true" aria-label="Текст страницы"
+         data-placeholder="Начните писать. Форматирование — кнопками сверху или Ctrl+B / Ctrl+I; картинки можно вставить из буфера или перетащить сюда."></div>
   </div>
   <input type="file" data-editor-file hidden multiple>
 
@@ -137,4 +162,5 @@
   </div>
 </form>
 
-<%- include('/partials/footer', { scripts: ['/js/editor.js'] }) %>
+<%# turndown (HTML → Markdown) нужен визуальному редактору; подключается до editor.js. %>
+<%- include('/partials/footer', { scripts: ['/vendor/turndown/turndown.browser.umd.js', '/js/editor.js'] }) %>

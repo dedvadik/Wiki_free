@@ -12,6 +12,7 @@
 import bcrypt from 'bcryptjs';
 import { config } from '../config.js';
 import { one } from '../db/pool.js';
+import { compareInPool, hashInPool } from './password-pool.js';
 
 /* ----------------------------------------------------------------------------
  * Роли упорядочены по возрастанию прав. Проверка «есть ли у пользователя
@@ -43,13 +44,15 @@ export class ValidationError extends Error {}
  * Пароли. bcrypt — медленная (намеренно) функция хеширования со встроенной
  * «солью»: даже одинаковые пароли дают разные хеши, а перебор утёкшей базы
  * становится очень дорогим. bcryptjs — реализация на чистом JavaScript.
+ * Вычисления идут в пуле потоков (services/password-pool.js), чтобы вход
+ * одного пользователя не задерживал запросы всех остальных.
  * ------------------------------------------------------------------------- */
 export function hashPassword(password) {
-  return bcrypt.hash(password, config.bcryptRounds);
+  return hashInPool(password, config.bcryptRounds);
 }
 
 export function verifyPassword(password, hash) {
-  return bcrypt.compare(password, hash);
+  return compareInPool(password, hash);
 }
 
 /* Фиктивный хеш для защиты от timing-атаки: если пользователь НЕ найден, мы

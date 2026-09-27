@@ -13,6 +13,8 @@
 import { Router } from 'express';
 import { many, one } from '../db/pool.js';
 import { requireLogin } from '../middleware/auth.js';
+import { readableSpacesSql } from '../services/permissions.js';
+import { hasRole } from '../services/users.js';
 
 export const profileRouter = Router();
 
@@ -31,6 +33,8 @@ profileRouter.get('/profile', requireLogin, async (req, res) => {
     ),
     /* Последние правки: по одной строке на страницу (DISTINCT ON), затем
      * сортировка по времени правки — свежие сверху. */
+    /* Ленты показывают только страницы пространств, которые пользователь
+     * может читать сейчас: доступ к пространству могли отозвать. */
     many(
       `SELECT * FROM (
          SELECT DISTINCT ON (p.id) p.id, p.title, v.version, v.created_at,
@@ -38,22 +42,22 @@ profileRouter.get('/profile', requireLogin, async (req, res) => {
            FROM page_versions v
            JOIN pages p ON p.id = v.page_id
            JOIN spaces s ON s.id = p.space_id
-          WHERE v.author_id = $1
+          WHERE v.author_id = $1 AND ${readableSpacesSql('s', '$2', '$1')}
           ORDER BY p.id, v.created_at DESC
        ) t
        ORDER BY created_at DESC
        LIMIT 10`,
-      [userId],
+      [userId, hasRole(req.user, 'admin')],
     ),
     many(
       `SELECT p.id, p.title, s.icon AS space_icon, s.name AS space_name
          FROM favorites f
          JOIN pages p ON p.id = f.page_id
          JOIN spaces s ON s.id = p.space_id
-        WHERE f.user_id = $1
+        WHERE f.user_id = $1 AND ${readableSpacesSql('s', '$2', '$1')}
         ORDER BY f.created_at DESC
         LIMIT 10`,
-      [userId],
+      [userId, hasRole(req.user, 'admin')],
     ),
   ]);
 

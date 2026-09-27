@@ -20,12 +20,14 @@
     data-default-mode — светлый/тёмный режим по умолчанию (читает theme-init.js);
     data-ui-theme     — id активной темы; удобно для custom.css:
                         :root[data-ui-theme="icloud"] .topbar { … }
+    data-default-editor — редактор страниц по умолчанию (visual | markdown),
+                        его читают editor.js и «Настройки → Оформление».
 
   Чтобы изменить шапку под себя — скопируйте файл в custom/views/partials/.
   ============================================================================
 %>
 <!DOCTYPE html>
-<html lang="ru" data-default-mode="<%= site.default_theme %>" data-ui-theme="<%= activeTheme.id %>">
+<html lang="ru" data-default-mode="<%= site.default_theme %>" data-ui-theme="<%= activeTheme.id %>" data-default-editor="<%= site.default_editor %>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -44,7 +46,16 @@
   <link rel="stylesheet" href="/theme.css?v=<%= themeVersion %>">
   <% if (customAssets.css) { %><link rel="stylesheet" href="/custom.css?v=<%= assetVersion %>"><% } %>
 </head>
-<body class="<%= locals.bodyClass || '' %>">
+<%#
+  Классы <body>:
+   - bodyClass из шаблона ('editor-mode' — редактор, 'auth-page' — вход/регистрация);
+   - hide-caret — скрыть мигающий текстовый курсор (настройка «Интерфейс»),
+     кроме редактора страниц, где он нужен для набора текста.
+%>
+<% const bodyClasses = locals.bodyClass || '';
+   const isEditor = bodyClasses.includes('editor-mode');
+   const isAuthPage = bodyClasses.includes('auth-page'); %>
+<body class="<%= bodyClasses %><%= site.hide_caret && !isEditor ? ' hide-caret' : '' %>">
 
 <%# ---------------------------- Верхняя панель ---------------------------- %>
 <header class="topbar">
@@ -54,14 +65,18 @@
       <span class="brand-name"><%= site.site_name %></span>
     </a>
 
-    <nav class="topnav" aria-label="Основная навигация">
-      <a href="/spaces" class="<%= currentPath.startsWith('/spaces') ? 'active' : '' %>">Пространства</a>
-      <a href="/labels" class="<%= currentPath.startsWith('/labels') ? 'active' : '' %>">Метки</a>
-    </nav>
+    <%# На страницах входа и регистрации навигация и поиск не показываются:
+        там нечего искать и некуда переходить до входа. %>
+    <% if (!isAuthPage) { %>
+      <nav class="topnav" aria-label="Основная навигация">
+        <a href="/spaces" class="<%= currentPath.startsWith('/spaces') ? 'active' : '' %>">Пространства</a>
+        <a href="/labels" class="<%= currentPath.startsWith('/labels') ? 'active' : '' %>">Метки</a>
+      </nav>
 
-    <form class="search-box" action="/search" method="get" role="search">
-      <input type="search" name="q" placeholder="Поиск по статьям…" value="<%= searchQuery %>" aria-label="Поиск">
-    </form>
+      <form class="search-box" action="/search" method="get" role="search">
+        <input type="search" name="q" placeholder="Поиск по статьям…" value="<%= searchQuery %>" aria-label="Поиск">
+      </form>
+    <% } %>
 
     <div class="topbar-actions">
       <% if (can('editor')) { %>

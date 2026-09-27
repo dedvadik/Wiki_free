@@ -191,6 +191,17 @@ code, pre, kbd, .mono { font-family: var(--font-mono); }
 .search-box input:focus { outline: none; background: var(--surface); color: var(--text); border-color: var(--primary); }
 
 .topbar-actions { display: flex; align-items: center; gap: 10px; }
+/* На страницах входа нет поиска (он отодвигал кнопки вправо) — прижимаем сами. */
+.auth-page .topbar-actions { margin-left: auto; }
+
+/* Настройка «Мигающий курсор — только в редакторе»: класс hide-caret на
+   <body> ставит partials/header.ejs везде, кроме редактора страниц.
+   caret-color: transparent скрывает только мигающую черту — набор текста,
+   выделение и рамка активного поля работают как обычно. Заодно над обычным
+   текстом мышь показывает стрелку, а не текстовый курсор «I»: cursor
+   наследуется, а у ссылок и кнопок свой cursor: pointer, он сохраняется. */
+.hide-caret, .hide-caret * { caret-color: transparent; }
+.hide-caret { cursor: default; }
 
 /* Кнопки в шапке крупнее и круглее обычных. */
 .topbar .btn { height: 42px; padding: 0 18px; border-radius: 999px; font-size: .98rem; }
@@ -496,6 +507,8 @@ input[type="color"] { width: 56px; height: 38px; padding: 3px; cursor: pointer; 
 .tree-link.leaf { margin-left: 16px; }
 .tree-link:hover { background: var(--bg-hover); text-decoration: none; }
 .tree-link.active { background: var(--primary-soft); color: var(--link); font-weight: 600; }
+/* «Загрузка…» внутри свёрнутой ветки, которая подгружается при раскрытии (app.js, п. 9). */
+.tree-loading { padding: 4px 8px 4px 16px; }
 
 
 /* ---------------------------------------------------------------------------
@@ -749,6 +762,38 @@ pre:hover .copy-btn { opacity: 1; }
 .editor-workspace[data-mode="preview"] textarea { display: none; }
 .editor-workspace[data-mode="preview"] .editor-preview { max-height: none; }
 
+/* ---- Визуальный редактор (contenteditable) ----
+   data-type на .editor-workspace: markdown | visual. Правила ниже объявлены
+   после правил data-mode и при равной специфичности побеждают их. */
+.editor-visual { display: none; position: relative; min-height: 60vh; padding: 20px 28px; outline: none; background: var(--surface); overflow: auto; }
+.editor-workspace[data-type="visual"] { grid-template-columns: 1fr; }
+.editor-workspace[data-type="visual"] textarea,
+.editor-workspace[data-type="visual"] .editor-preview { display: none; }
+.editor-workspace[data-type="visual"] .editor-visual { display: block; }
+/* Подсказка в пустом редакторе: он пуст совсем или в нём только пустой абзац
+   (класс is-empty ставит editor.js — CSS не умеет проверить «нет текста»). */
+.editor-visual:empty::before,
+.editor-visual.is-empty::before {
+  content: attr(data-placeholder); position: absolute; top: 20px; left: 28px; right: 28px;
+  color: var(--text-muted); pointer-events: none;
+}
+.editor-visual img { max-width: 100%; }
+.editor-visual th, .editor-visual td { min-width: 70px; }
+/* «Неразборные» элементы: панельный значок, статус, заглушка оглавления. */
+.editor-visual [contenteditable="false"] { cursor: default; user-select: none; }
+.editor-visual .toc-macro { border: 1px dashed var(--border-strong); }
+.editor-visual li > input[type="checkbox"] { cursor: pointer; }
+
+/* Кнопки, которые имеют смысл только в одном из типов редактора. */
+.editor-form[data-editor-type="visual"] .markdown-only,
+.editor-form[data-editor-type="markdown"] .visual-only { display: none; }
+
+/* Переключатель «Визуальный / Markdown» — как view-switch, но заметнее. */
+.editor-type-switch { display: flex; margin-right: 6px; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
+.editor-type-switch[hidden] { display: none; }
+.editor-toolbar .editor-type-switch button { height: 30px; border-radius: 0; font-weight: 600; padding: 0 12px; }
+.editor-type-switch button.active { background: var(--primary); color: #fff; }
+
 .editor-meta { display: grid; grid-template-columns: 2fr 110px 2fr 2fr; gap: 16px; margin-top: 16px; }
 .editor-footer {
   position: sticky; bottom: 0;
@@ -967,6 +1012,36 @@ a.stat-tile:hover { text-decoration: none; box-shadow: var(--shadow-lg); }
 .stat-tile-value { font-size: 1.55rem; font-weight: 800; line-height: 1.1; }
 .stat-tile-label { color: var(--text-muted); font-size: .88rem; }
 .stat-tile-hint { color: var(--text-muted); font-size: .78rem; margin-top: 2px; }
+
+/* ---- Карточки выбора варианта (доступ к пространству и т.п.) ----
+   <label class="option-card"> с радиокнопкой внутри; выбранная карточка
+   подсвечивается через :has(input:checked) — без JavaScript. */
+.option-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.option-card {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 14px 16px;
+  border: 2px solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color .12s, box-shadow .12s;
+}
+.option-card:hover { border-color: var(--border-strong); }
+.option-card:has(input:checked) { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.option-card:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
+.option-card-title { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.option-card-desc { font-size: .85rem; color: var(--text-muted); }
+.settings-card-title-spaced { margin-top: 24px; }
+.settings-card-subtitle { margin: 22px 0 12px; font-size: .95rem; font-weight: 600; color: var(--text-muted); }
+
+/* ---- Права доступа пространства ---- */
+.permissions-page { max-width: 880px; }
+.badge-lock { display: inline-flex; align-items: center; gap: 4px; background: color-mix(in srgb, var(--warning) 20%, transparent); color: color-mix(in srgb, var(--warning) 60%, var(--text)); }
+.space-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+.member-row { flex-wrap: wrap; }
+.member-row .help.warn { display: block; margin: 2px 0 0; }
+.member-access { display: flex; align-items: center; gap: 6px; }
+.member-access select { padding: 5px 8px; }
 
 /* Карточка пользователя в админке. */
 .user-card { display: flex; gap: 18px; align-items: center; }

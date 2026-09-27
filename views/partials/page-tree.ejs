@@ -5,23 +5,35 @@
   Шаблон вызывает сам себя для дочерних страниц. Раскрытие/сворачивание
   веток сделано на нативном <details>/<summary> — без JavaScript.
   Параметры:
-    nodes         — массив узлов [{ id, title, children: [...] }]
+    nodes         — массив узлов [{ id, title, children: [...], child_count? }]
     currentPageId — id открытой страницы (подсвечивается)
     openIds       — id страниц, ветки которых нужно раскрыть (путь к текущей)
   currentPageId и openIds автоматически «наследуются» вложенными вызовами.
+
+  «Ленивые» ветки: если у узла есть дочерние страницы (child_count > 0), но
+  они не загружены (дерево строит getSpaceTreeAround — только путь к
+  открытой странице), ветка выводится свёрнутой с data-tree-lazy="id".
+  При раскрытии public/js/app.js подгружает её с /api/pages/:id/children —
+  этот же шаблон, отрисованный сервером.
   ============================================================================
 %>
 <ul class="tree">
   <% nodes.forEach((node) => {
        const isActive = node.id === locals.currentPageId;
-       const isOpen = (locals.openIds || []).includes(node.id); %>
+       const isOpen = (locals.openIds || []).includes(node.id);
+       const hasChildren = node.children.length > 0 || node.child_count > 0;
+       const isLazy = !node.children.length && node.child_count > 0; %>
     <li>
-      <% if (node.children.length) { %>
-        <details <%= isOpen ? 'open' : '' %>>
+      <% if (hasChildren) { %>
+        <details <%= isOpen && !isLazy ? 'open' : '' %> <%- isLazy ? `data-tree-lazy="${node.id}"` : '' %>>
           <summary>
             <a class="tree-link <%= isActive ? 'active' : '' %>" href="<%= pageUrl(node) %>"><%= node.title %></a>
           </summary>
-          <%- include('/partials/page-tree', { nodes: node.children }) %>
+          <% if (isLazy) { %>
+            <ul class="tree"><li class="tree-loading muted small">Загрузка…</li></ul>
+          <% } else { %>
+            <%- include('/partials/page-tree', { nodes: node.children }) %>
+          <% } %>
         </details>
       <% } else { %>
         <a class="tree-link leaf <%= isActive ? 'active' : '' %>" href="<%= pageUrl(node) %>"><%= node.title %></a>

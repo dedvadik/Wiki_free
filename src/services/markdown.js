@@ -226,9 +226,16 @@ const SANITIZE_OPTIONS = {
 /* ----------------------------------------------------------------------------
  * HTML-оглавление для макроса [[toc]]. Уровни отступов считаются от самого
  * «крупного» заголовка документа (если в статье нет h1, то h2 — нулевой уровень).
+ * Если заголовков нет, в статье макрос просто не виден, а в редакторе
+ * (editing) остаётся заглушка — иначе визуальный редактор «потерял» бы
+ * [[toc]] при обратном преобразовании в Markdown.
  * ------------------------------------------------------------------------- */
-function buildTocHtml(toc) {
-  if (!toc.length) return '';
+function buildTocHtml(toc, editing = false) {
+  if (!toc.length) {
+    return editing
+      ? '<nav class="toc-macro"><div class="toc-title">Содержание</div><p class="muted small">Оглавление соберётся из заголовков страницы</p></nav>'
+      : '';
+  }
   const minLevel = Math.min(...toc.map((t) => t.level));
   const items = toc
     .map((t) => `<li class="toc-l${t.level - minLevel}"><a href="#${escapeHtml(t.id)}">${escapeHtml(t.text)}</a></li>`)
@@ -242,8 +249,10 @@ function buildTocHtml(toc) {
  *   html — безопасный HTML для вставки в страницу
  *   toc  — массив заголовков [{ level, text, id }] для боковой панели
  *          «На этой странице»
+ * Параметр editing: true — HTML для редактора (предпросмотр и визуальный
+ * режим): пустое оглавление показывается заглушкой.
  * ------------------------------------------------------------------------- */
-export function renderMarkdown(source) {
+export function renderMarkdown(source, { editing = false } = {}) {
   renderState = { toc: [], slugs: new Map() };
   try {
     const rawHtml = marked.parse(String(source ?? ''));
@@ -251,11 +260,39 @@ export function renderMarkdown(source) {
     const { toc } = renderState;
     /* Замена маркера [[toc]] — ПОСЛЕ очистки, т.к. оглавление строим мы сами
      * из уже экранированного текста. */
-    if (html.includes(TOC_PLACEHOLDER)) html = html.replaceAll(TOC_PLACEHOLDER, buildTocHtml(toc));
+    if (html.includes(TOC_PLACEHOLDER)) html = html.replaceAll(TOC_PLACEHOLDER, buildTocHtml(toc, editing));
     return { html, toc };
   } finally {
     renderState = null;
   }
+}
+
+/* ----------------------------------------------------------------------------
+ * renderPageCached — renderMarkdown для просмотра статьи с кэшем в памяти.
+ * Разбор Markdown, подсветка кода и очистка HTML — около трети работы
+ * сервера при каждом показе статьи (замер нагрузочного теста), а текст
+ * меняется редко. Ключ кэша — id, номер версии и время изменения: любая
+ * правка текста создаёт новую версию, поэтому устаревший HTML не покажется
+ * никогда (старая запись просто вытеснится).
+ * Map помнит порядок вставки: повторное обращение переносит запись в конец,
+ * а при переполнении удаляется самая давняя — простейший LRU-кэш.
+ * В каждом процессе свой кэш; 500 статей ≈ 10–20 МБ памяти.
+ * ------------------------------------------------------------------------- */
+const PAGE_CACHE_SIZE = 500;
+const pageCache = new Map();
+
+export function renderPageCached(page) {
+  const key = `${page.id}:${page.version}:${new Date(page.updated_at).getTime()}`;
+  const cached = pageCache.get(key);
+  if (cached) {
+    pageCache.delete(key);
+    pageCache.set(key, cached);
+    return cached;
+  }
+  const result = renderMarkdown(page.content);
+  pageCache.set(key, result);
+  if (pageCache.size > PAGE_CACHE_SIZE) pageCache.delete(pageCache.keys().next().value);
+  return result;
 }
 
 /* ----------------------------------------------------------------------------

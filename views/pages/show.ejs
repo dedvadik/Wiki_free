@@ -14,7 +14,7 @@
               comments, isFavorite, contentHtml, toc
   ============================================================================
 %>
-<%- include('/partials/header', { title: page.title, createUrl: `/spaces/${space.key}/pages/new?parent=${page.id}` }) %>
+<%- include('/partials/header', { title: page.title, createUrl: access.canEdit ? `/spaces/${space.key}/pages/new?parent=${page.id}` : null }) %>
 <% const showToc = toc.length > 1;
    const minLevel = showToc ? Math.min(...toc.map((t) => t.level)) : 1; %>
 
@@ -46,7 +46,7 @@
             </button>
           </form>
         <% } %>
-        <% if (can('editor')) { %>
+        <% if (access.canEdit) { %>
           <a class="btn btn-sm btn-primary" href="/pages/<%= page.id %>/edit">✎ Редактировать</a>
         <% } %>
 
@@ -56,7 +56,7 @@
             <a href="/pages/<%= page.id %>/history">🕘 История версий</a>
             <a href="/pages/<%= page.id %>/export.md">⬇ Экспорт в Markdown</a>
             <a href="#" data-action="print">🖨 Печать</a>
-            <% if (can('editor')) { %>
+            <% if (access.canEdit) { %>
               <a href="/spaces/<%= space.key %>/pages/new?parent=<%= page.id %>">＋ Дочерняя страница</a>
               <form method="post" action="/pages/<%= page.id %>/delete" class="menu-form"
                     data-confirm="Удалить страницу «<%= page.title %>»? Это действие нельзя отменить.">
@@ -119,7 +119,7 @@
                 <td><a href="/uploads/<%= a.stored_name %>" target="_blank" rel="noopener">📎 <%= a.original_name %></a></td>
                 <td class="muted small nowrap"><%= fileSize(a.size_bytes) %></td>
                 <td class="muted small"><%= authorName(a.uploaded_by_name) %>, <%= formatDate(a.created_at) %></td>
-                <% if (can('editor')) { %>
+                <% if (access.canEdit) { %>
                   <td class="right">
                     <form method="post" action="/attachments/<%= a.id %>/delete" class="inline" data-confirm="Удалить вложение «<%= a.original_name %>»? Ссылки на него в тексте перестанут работать.">
                       <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
@@ -145,7 +145,7 @@
             <div class="comment-meta">
               <b><%= authorName(c.author_name) %></b>
               <span class="muted small" title="<%= formatDateTime(c.created_at) %>"><%= timeAgo(c.created_at) %></span>
-              <% if (currentUser && (c.author_id === currentUser.id || can('admin'))) { %>
+              <% if (currentUser && (c.author_id === currentUser.id || access.canManage)) { %>
                 <form method="post" action="/comments/<%= c.id %>/delete" class="inline" data-confirm="Удалить комментарий?">
                   <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
                   <button class="link-btn danger small" type="submit">удалить</button>

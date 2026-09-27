@@ -57,7 +57,58 @@ export function flattenTree(nodes, excludeId = null, depth = 0, out = []) {
   return out;
 }
 
-/* Дерево всех страниц пространства, отсортированное по position и названию. */
+/* ----------------------------------------------------------------------------
+ * getSpaceTreeAround — дерево для боковой панели БЕЗ загрузки всех страниц.
+ * В большом пространстве (тысячи страниц) полное дерево — это мегабайты
+ * HTML в каждой статье. Поэтому загружаются только:
+ *   - корневые страницы пространства;
+ *   - дочерние страницы для каждой страницы на пути к открытой
+ *     (предки + сама страница) — путь виден раскрытым, как в Confluence.
+ * Остальные ветки свёрнуты; у узла есть child_count, и когда пользователь
+ * раскрывает ветку, её содержимое подгружается с /api/pages/:id/children
+ * (public/js/app.js). Без JavaScript ссылка ведёт на страницу, где эта
+ * ветка уже раскрыта, — навигация работает всегда.
+ *
+ * Путь к странице считается рекурсивным CTE прямо в запросе (как в
+ * getAncestors), поэтому дерево можно грузить параллельно с остальными
+ * данными статьи. pageId = null — только корневые страницы (главная
+ * страница пространства).
+ * ------------------------------------------------------------------------- */
+export async function getSpaceTreeAround(spaceId, pageId = null) {
+  const rows = await many(
+    `WITH RECURSIVE chain AS (
+        SELECT id, parent_id, 0 AS depth FROM pages WHERE id = $2
+        UNION ALL
+        SELECT p.id, p.parent_id, c.depth + 1
+          FROM pages p JOIN chain c ON p.id = c.parent_id
+         WHERE c.depth < 100
+     )
+     SELECT p.id, p.parent_id, p.title, p.position,
+            (SELECT count(*)::int FROM pages c WHERE c.parent_id = p.id) AS child_count
+       FROM pages p
+      WHERE p.space_id = $1
+        AND (p.parent_id IS NULL OR p.parent_id IN (SELECT id FROM chain))
+      ORDER BY p.position, lower(p.title)`,
+    [spaceId, pageId],
+  );
+  return buildTree(rows);
+}
+
+/* Дочерние страницы одной ветки — для подгрузки свёрнутых веток дерева. */
+export function getChildNodes(pageId) {
+  return many(
+    `SELECT p.id, p.parent_id, p.title, p.position,
+            (SELECT count(*)::int FROM pages c WHERE c.parent_id = p.id) AS child_count
+       FROM pages p
+      WHERE p.parent_id = $1
+      ORDER BY p.position, lower(p.title)`,
+    [pageId],
+  ).then((rows) => rows.map((row) => ({ ...row, children: [] })));
+}
+
+/* Дерево ВСЕХ страниц пространства, отсортированное по position и названию.
+ * Нужно редактору (список «Родительская страница»); для навигации — см.
+ * getSpaceTreeAround. */
 export async function getSpaceTree(spaceId) {
   const rows = await many(
     `SELECT id, parent_id, title, position
@@ -165,6 +216,9 @@ export async function linkAttachments(db, pageId, idsInput, userId) {
   );
 }
 
+/* Максимальная длина текста страницы в символах (≈ 500 страниц А4). */
+export const MAX_CONTENT_LENGTH = 1_000_000;
+
 /* ----------------------------------------------------------------------------
  * readPageForm — извлечение и проверка полей формы редактора.
  * Возвращает { form, errors }. form содержит нормализованные значения,
@@ -187,6 +241,8 @@ export function readPageForm(body) {
   const errors = [];
   if (!form.title) errors.push('Заголовок страницы обязателен');
   if (form.title.length > 300) errors.push('Заголовок слишком длинный (максимум 300 символов)');
-  if (form.content.length > 2_000_000) errors.push('Текст страницы слишком большой (максимум ~2 МБ)');
+  /* 1 млн символов ≈ 500 страниц А4. Больше — уже не статья: такой текст
+   * отрисовывается секунды и не помещается в лимит формы (см. app.js). */
+  if (form.content.length > MAX_CONTENT_LENGTH) errors.push('Текст страницы слишком большой (максимум 1 000 000 символов — разделите его на несколько страниц)');
   return { form, errors };
 }

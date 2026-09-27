@@ -12,11 +12,11 @@
     <span class="space-icon" style="background: <%= space.color %>"><%= space.icon %></span>
     <span class="sidebar-space-text">
       <strong><%= space.name %></strong>
-      <small><%= space.key %></small>
+      <small><%= space.key %><% if (space.visibility === 'restricted') { %> · <%- icon('lock') %> закрытое<% } %></small>
     </span>
   </a>
 
-  <% if (can('editor')) { %>
+  <% if (locals.access && access.canEdit) { %>
     <a class="btn btn-block" href="/spaces/<%= space.key %>/pages/new">+ Новая страница</a>
   <% } %>
 

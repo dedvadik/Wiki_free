@@ -45,7 +45,7 @@ Express пропускает запрос через middleware **сверху �
 | № | Middleware | Зачем | Почему здесь |
 | --- | --- | --- | --- |
 | 1 | `helmet(...)` | CSP, запрет встраивания, nosniff и др. | заголовки нужны на всех ответах |
-| 2 | `express.static(custom/public)`, `express.static(public)` | статика | до сессий: быстрее и не создаёт записей в БД; `custom` раньше — может заменить любой файл |
+| 2 | `express.static(custom/public)`, `express.static(public)`, `/vendor/turndown` | статика | до сессий: быстрее и не создаёт записей в БД; `custom` раньше — может заменить любой файл; `/vendor/turndown` — библиотека визуального редактора прямо из `node_modules` |
 | 3 | логгер | `GET /pages/5 200 12ms` | статику не логируем; `/healthz` пропускаем |
 | 4 | `express.urlencoded`, `express.json` | разбор форм и JSON (до 5 МБ) | CSRF-проверке нужно поле `_csrf` из тела |
 | 5 | `session(...)` | сессия в PostgreSQL | всё ниже работает с `req.session` |

@@ -2,12 +2,15 @@
   ============================================================================
   spaces/show.ejs — главная страница пространства
   ----------------------------------------------------------------------------
-  Слева — дерево страниц; справа — заголовок, описание (Markdown),
-  страницы верхнего уровня и последние изменения в этом пространстве.
-  Переменные: space, tree, recent, descriptionHtml
+  Слева — дерево страниц; справа — заголовок, владелец и режим доступа,
+  описание (Markdown), страницы верхнего уровня и последние изменения.
+  Кнопки зависят от прав на ЭТО пространство (access из
+  services/permissions.js): «Новая страница» — у тех, кто может править;
+  «Права доступа» и «Настройки» — у владельца и администраторов.
+  Переменные: space, access, tree, recent, ownerName, descriptionHtml
   ============================================================================
 %>
-<%- include('/partials/header', { title: space.name, createUrl: `/spaces/${space.key}/pages/new` }) %>
+<%- include('/partials/header', { title: space.name, createUrl: access.canEdit ? `/spaces/${space.key}/pages/new` : null }) %>
 
 <div class="space-layout">
   <%- include('/partials/space-sidebar', { space, tree }) %>
@@ -19,15 +22,30 @@
       <span class="space-icon space-icon-lg" style="background: <%= space.color %>"><%= space.icon %></span>
       <div class="grow">
         <h1><%= space.name %></h1>
-        <div class="muted small">Ключ: <%= space.key %> · создано <%= formatDate(space.created_at) %></div>
-      </div>
-      <% if (can('editor')) { %>
-        <div class="page-actions">
-          <a class="btn btn-primary" href="/spaces/<%= space.key %>/pages/new">+ Новая страница</a>
-          <a class="btn" href="/spaces/<%= space.key %>/edit">⚙ Настройки</a>
+        <div class="space-meta">
+          <% if (space.visibility === 'restricted') { %>
+            <span class="badge badge-lock"><%- icon('lock') %> Закрытое</span>
+          <% } else { %>
+            <span class="badge"><%- icon('globe') %> Открытое</span>
+          <% } %>
+          <span class="muted small">Ключ: <%= space.key %><% if (ownerName) { %> · владелец: <%= ownerName %><% } %> · создано <%= formatDate(space.created_at) %></span>
         </div>
-      <% } %>
+      </div>
+      <div class="page-actions">
+        <% if (access.canEdit) { %>
+          <a class="btn btn-primary" href="/spaces/<%= space.key %>/pages/new">+ Новая страница</a>
+        <% } %>
+        <% if (access.canManage) { %>
+          <a class="btn" href="/spaces/<%= space.key %>/permissions"><%- icon('lock') %> Права доступа</a>
+          <a class="btn" href="/spaces/<%= space.key %>/edit"><%- icon('settings') %> Настройки</a>
+        <% } %>
+      </div>
     </header>
+
+    <% if (currentUser && !access.canEdit && can('editor')) { %>
+      <%# Редактор видит пространство, но править здесь не может — объясняем. %>
+      <div class="flash flash-info">В этом пространстве вы можете только читать. Право редактирования выдаёт владелец пространства.</div>
+    <% } %>
 
     <% if (descriptionHtml) { %>
       <div class="markdown-body space-description"><%- descriptionHtml %></div>
@@ -38,13 +56,13 @@
         <h2 class="card-title">Разделы</h2>
         <% if (!tree.length) { %>
           <p class="muted">Страниц пока нет.
-            <% if (can('editor')) { %><a href="/spaces/<%= space.key %>/pages/new">Создайте первую</a>.<% } %>
+            <% if (access.canEdit) { %><a href="/spaces/<%= space.key %>/pages/new">Создайте первую</a>.<% } %>
           </p>
         <% } else { %>
           <ul class="compact-list">
             <% tree.forEach((node) => { %>
               <li>📄 <a href="<%= pageUrl(node) %>"><%= node.title %></a>
-                <% if (node.children.length) { %><span class="muted small">+<%= node.children.length %></span><% } %>
+                <% if (node.child_count) { %><span class="muted small">+<%= node.child_count %></span><% } %>
               </li>
             <% }) %>
           </ul>

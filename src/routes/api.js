@@ -15,6 +15,7 @@ import { Router } from 'express';
 import { pool } from '../db/pool.js';
 import { requireRole } from '../middleware/auth.js';
 import { renderMarkdown } from '../services/markdown.js';
+import { MAX_CONTENT_LENGTH } from '../services/pages.js';
 import { getSettings, getSettingsVersion } from '../services/settings.js';
 import { buildThemeCss } from '../services/theme.js';
 
@@ -51,7 +52,8 @@ publicApiRouter.get('/theme.css', (req, res) => {
 export const apiRouter = Router();
 
 apiRouter.post('/api/preview', requireRole('editor'), (req, res) => {
-  const content = String(req.body?.content ?? '').slice(0, 2_000_000);
-  const { html, toc } = renderMarkdown(content);
+  const content = String(req.body?.content ?? '').slice(0, MAX_CONTENT_LENGTH);
+  /* editing: пустой [[toc]] остаётся видимой заглушкой (см. markdown.js). */
+  const { html, toc } = renderMarkdown(content, { editing: true });
   res.json({ html, toc });
 });

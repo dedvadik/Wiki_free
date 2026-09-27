@@ -34,9 +34,16 @@ export function errorHandler(err, req, res, next) {
   if (res.headersSent) return next(err);
 
   /* В production не раскрываем внутренние детали 500-х ошибок. */
-  const message = status >= 500 && config.isProduction
+  let message = status >= 500 && config.isProduction
     ? 'Внутренняя ошибка сервера. Попробуйте позже.'
     : err.message;
+  /* Тело запроса больше лимита (app.js, п. 4): у body-parser сообщение
+   * по-английски — заменяем понятным. Кнопка «Назад» в браузере вернёт
+   * форму с набранным текстом. */
+  if (err.type === 'entity.too.large') {
+    message = 'Слишком большой объём данных: текст страницы должен быть не длиннее 1 000 000 символов. '
+      + 'Вернитесь назад — набранный текст сохранится — и разделите его на несколько страниц.';
+  }
 
   /* JS-запросы (fetch к /api/...) получают JSON, браузер — HTML-страницу. */
   if (req.path.startsWith('/api/') || req.accepts(['html', 'json']) === 'json') {

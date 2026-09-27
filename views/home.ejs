@@ -70,6 +70,7 @@
             <li>
               <span class="space-icon space-icon-sm" style="background: <%= s.color %>"><%= s.icon %></span>
               <a href="/spaces/<%= s.key %>"><%= s.name %></a>
+              <% if (s.visibility === 'restricted') { %><span class="muted small" title="Закрытое пространство"><%- icon('lock') %></span><% } %>
               <span class="muted small"><%= s.page_count %></span>
             </li>
           <% }) %>

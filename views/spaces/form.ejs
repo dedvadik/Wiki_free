@@ -4,8 +4,10 @@
   ----------------------------------------------------------------------------
   Один шаблон на два случая (isNew = true/false). Ключ задаётся только при
   создании: он используется в адресах страниц и потом не меняется.
+  При создании выбирается доступ (открытое/закрытое); в настройках — ссылка
+  на страницу «Права доступа». Настройки видят владелец и администраторы.
   Для администратора внизу — «опасная зона» с удалением пространства.
-  Переменные: isNew, space, errors
+  Переменные: isNew, space, errors, visibilityOptions (при создании)
   ============================================================================
 %>
 <%- include('/partials/header', { title: isNew ? 'Новое пространство' : `Настройки: ${space.name}` }) %>
@@ -51,11 +53,38 @@
       <p class="help">Показывается на главной странице пространства.</p>
     </div>
 
+    <% if (isNew) { %>
+      <%# Доступ выбирается сразу при создании; участников и права на
+          редактирование владелец настроит потом на странице «Права доступа». %>
+      <div class="field">
+        <label>Доступ</label>
+        <div class="option-cards" role="radiogroup">
+          <% Object.entries(visibilityOptions).forEach(([value, opt]) => { %>
+            <label class="option-card">
+              <input type="radio" class="visually-hidden" name="visibility" value="<%= value %>" <%= space.visibility === value ? 'checked' : '' %>>
+              <span class="option-card-title"><%- icon(value === 'restricted' ? 'lock' : 'globe') %> <%= opt.label %></span>
+              <span class="option-card-desc"><%= opt.description %></span>
+            </label>
+          <% }) %>
+        </div>
+        <p class="help">Вы станете владельцем пространства и сможете настраивать, кто его читает и кто правит.</p>
+      </div>
+    <% } %>
+
     <div class="form-actions">
       <button class="btn btn-primary" type="submit"><%= isNew ? 'Создать' : 'Сохранить' %></button>
       <a class="btn" href="<%= isNew ? '/spaces' : `/spaces/${space.key}` %>">Отмена</a>
     </div>
   </form>
+
+  <% if (!isNew) { %>
+    <a class="card settings-row settings-row-link" href="/spaces/<%= space.key %>/permissions">
+      <span class="settings-tile" style="--tile: #ff9500"><%- icon('lock') %></span>
+      <span class="grow"><strong>Права доступа</strong>
+        <span class="muted small">Кто читает и кто правит пространство, участники, владелец</span></span>
+      <%- icon('chevron-right', 'muted') %>
+    </a>
+  <% } %>
 
   <% if (!isNew && can('admin')) { %>
     <%# Удаление требует ввести ключ пространства — защита от случайного клика. %>

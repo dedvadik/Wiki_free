@@ -47,7 +47,7 @@
             <td><%= v.change_note %></td>
             <td class="right muted small nowrap"><%= fileSize(v.size) %></td>
             <td class="right nowrap">
-              <% if (!isCurrent && can('editor')) { %>
+              <% if (!isCurrent && access.canEdit) { %>
                 <button class="link-btn" type="submit" form="restore-<%= v.version %>">восстановить</button>
               <% } %>
             </td>

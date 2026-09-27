@@ -27,6 +27,7 @@
         { "title": "Настройки сайта", "file": "13-settings.md", "labels": ["backend", "настройки"] },
         { "title": "Статьи: разметка, дерево, версии, поиск", "file": "14-content.md", "labels": ["backend", "markdown", "поиск"] },
         { "title": "Пользователи, вход и LDAP", "file": "15-auth.md", "labels": ["backend", "ldap", "безопасность"] },
+        { "title": "Права доступа к пространствам", "file": "18-permissions.md", "labels": ["backend", "права", "безопасность"] },
         { "title": "Вложения", "file": "16-uploads.md", "labels": ["backend", "файлы"] },
         { "title": "Первый запуск и импорт документации", "file": "17-bootstrap.md", "labels": ["backend", "документация"] }
       ]
@@ -42,6 +43,7 @@
       ]
     },
     { "title": "Развёртывание в Docker", "file": "30-docker.md", "labels": ["docker", "devops"] },
+    { "title": "Нагрузочное тестирование", "file": "31-load-testing.md", "labels": ["нагрузка", "производительность", "devops"] },
     { "title": "Как расширять портал", "file": "40-extending.md", "labels": ["рецепты", "код"] }
   ]
 }

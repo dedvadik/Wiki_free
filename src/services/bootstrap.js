@@ -70,8 +70,8 @@ export async function seedDemoContent() {
 
   await transaction(async (db) => {
     const { rows: [space] } = await db.query(
-      `INSERT INTO spaces (key, name, description, icon, color, created_by)
-       VALUES ('DOCS', 'Документация', $1, '📘', '#0052cc', $2) RETURNING id`,
+      `INSERT INTO spaces (key, name, description, icon, color, created_by, owner_id)
+       VALUES ('DOCS', 'Документация', $1, '📘', '#0052cc', $2, $2) RETURNING id`,
       ['Пространство с руководствами по работе с базой знаний. Его можно отредактировать или удалить.', authorId],
     );
 

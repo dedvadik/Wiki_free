@@ -18,6 +18,7 @@
  *  10. 404 и обработчик ошибок
  * ============================================================================
  */
+import fs from 'node:fs';
 import path from 'node:path';
 import express from 'express';
 import session from 'express-session';
@@ -58,11 +59,38 @@ export function createApp({ sessionSecret }) {
    *    шаблонов. Поэтому все include в проекте пишутся с ведущим «/».
    * Итог: чтобы заменить любой шаблон или его кусок, достаточно положить
    * файл с тем же относительным путём в custom/views — код менять не нужно.
+   *
+   * Как ищутся include. Если передать EJS массив папок, он проверяет
+   * существование файла (fs.existsSync) при КАЖДОМ include в КАЖДОМ
+   * запросе. Нагрузочный тест показал, что это ~16% всей работы сервера
+   * (custom/ — том с диска хоста, проверка там особенно медленная). Поэтому:
+   *  - root — одна встроенная папка views: путь к файлу EJS вычисляет без
+   *    обращения к диску;
+   *  - includer — наша функция, которую EJS вызывает для каждого include:
+   *    если в custom/views есть файл с тем же путём, подставляем его.
+   *    В production результат проверки запоминается (переопределения и так
+   *    подхватываются только после перезапуска), в разработке файл
+   *    проверяется каждый раз — можно править custom/ «на горячую».
    * ---------------------------------------------------------------------- */
-  const viewDirs = [path.join(config.customDir, 'views'), config.viewsDir];
+  const customViews = path.join(config.customDir, 'views');
+  const overrideCache = new Map();
+  const customOverride = (includePath) => {
+    const relative = includePath.replace(/^[/\\]+/, '');
+    const file = path.resolve(customViews, path.extname(relative) ? relative : `${relative}.ejs`);
+    if (!file.startsWith(customViews + path.sep)) return null; /* «../» за пределы custom/views */
+    if (!config.isProduction) return fs.existsSync(file) ? file : null;
+    if (!overrideCache.has(file)) overrideCache.set(file, fs.existsSync(file) ? file : null);
+    return overrideCache.get(file);
+  };
   app.set('view engine', 'ejs');
-  app.set('views', viewDirs);
-  app.set('view options', { root: viewDirs });
+  app.set('views', [customViews, config.viewsDir]);
+  app.set('view options', {
+    root: config.viewsDir,
+    includer: (includePath) => {
+      const file = customOverride(includePath);
+      return file ? { filename: file } : undefined;
+    },
+  });
 
   /* --------------------------------------------------------------------------
    * 1. helmet — набор защитных заголовков. Главный — Content-Security-Policy:
@@ -96,6 +124,9 @@ export function createApp({ sessionSecret }) {
   const staticOptions = { maxAge: config.isProduction ? '7d' : 0, index: false };
   app.use(express.static(path.join(config.customDir, 'public'), staticOptions));
   app.use(express.static(config.publicDir, staticOptions));
+  /* Браузерная сборка библиотеки turndown (HTML → Markdown) для визуального
+   * редактора — прямо из node_modules, без внешних CDN. */
+  app.use('/vendor/turndown', express.static(path.join(config.rootDir, 'node_modules', 'turndown', 'lib'), staticOptions));
 
   /* --------------------------------------------------------------------------
    * 3. Простое логирование запросов: «GET /pages/5 200 12ms».
@@ -114,9 +145,13 @@ export function createApp({ sessionSecret }) {
 
   /* --------------------------------------------------------------------------
    * 4. Разбор тела запроса: HTML-формы и JSON (fetch из редактора).
-   *    Лимит 5 МБ — с запасом для длинных статей.
+   *    Лимиты согласованы с максимальной длиной статьи (1 млн символов,
+   *    MAX_CONTENT_LENGTH): форма кодирует каждую русскую букву как
+   *    «%D0%B0» — 6 байт, поэтому статье предельной длины нужно до ~6 МБ;
+   *    в JSON та же буква — 2 байта. Раньше лимит формы был 5 МБ и длинная
+   *    русская статья получала непонятную ошибку 413 вместо подсказки.
    * ---------------------------------------------------------------------- */
-  app.use(express.urlencoded({ extended: false, limit: '5mb' }));
+  app.use(express.urlencoded({ extended: false, limit: '8mb' }));
   app.use(express.json({ limit: '5mb' }));
 
   /* --------------------------------------------------------------------------

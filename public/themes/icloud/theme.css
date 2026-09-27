@@ -252,6 +252,9 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px var(--primary-
 .segmented input:checked + span { background: var(--surface); }
 :root[data-mode="dark"] .segmented input:checked + span { background: #636366; }
 
+/* Карточки выбора (доступ к пространству) — скруглённые, как в iOS. */
+.option-card { border-radius: 16px; }
+
 /* Профиль и плитки статистики. */
 .profile-hero { border-radius: 22px; }
 .profile-cover { height: 170px; }
@@ -323,6 +326,14 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 4px var(--primary-
 .tool-group { border-right-color: var(--hairline); }
 .editor-toolbar button { border-radius: 8px; }
 .editor-toolbar button:hover { background: var(--fill); border-color: transparent; }
+
+/* Переключатель типа редактора — сегментированный контрол, как в iOS. */
+.editor-type-switch { padding: 2px; border: 0; border-radius: 9px; background: var(--fill); }
+.editor-toolbar .editor-type-switch button { height: 28px; border-radius: 7px; }
+.editor-type-switch button.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+:root[data-mode="dark"] .editor-type-switch button.active { background: #636366; }
+.editor-visual { padding: 24px 32px; }
+.editor-visual:empty::before, .editor-visual.is-empty::before { top: 24px; left: 32px; right: 32px; }
 
 /* Переключатель «Текст / Оба / Просмотр» — сегментированный контрол. */
 .view-switch { padding: 2px; border: 0; border-radius: 9px; background: var(--fill); }

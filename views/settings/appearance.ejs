@@ -61,6 +61,14 @@
     <%# ------------------------- Редактор ---------------------------------- %>
     <div class="card settings-card">
       <h2 class="settings-card-title">Редактор страниц</h2>
+      <%# Тип редактора: визуальный (как в Word) или Markdown. По умолчанию —
+          значение из «Администрирование → Оформление → Интерфейс». %>
+      <div class="segmented" role="radiogroup" aria-label="Тип редактора">
+        <label><input type="radio" class="visually-hidden" name="editor-type" value="visual" data-pref="editor-type"><span><%- icon('edit') %> Визуальный</span></label>
+        <label><input type="radio" class="visually-hidden" name="editor-type" value="markdown" data-pref="editor-type"><span><%- icon('code') %> Markdown</span></label>
+      </div>
+      <p class="settings-card-note">Визуальный — форматирование кнопками, как в Word. Markdown — текстовая разметка. Переключиться можно и прямо в редакторе; страница в любом случае хранится одинаково.</p>
+      <h3 class="settings-card-subtitle">Вид Markdown-редактора</h3>
       <div class="segmented" role="radiogroup" aria-label="Режим редактора по умолчанию">
         <label><input type="radio" class="visually-hidden" name="editor-mode" value="edit" data-pref="editor-mode"><span><%- icon('edit') %> Текст</span></label>
         <label><input type="radio" class="visually-hidden" name="editor-mode" value="split" data-pref="editor-mode"><span><%- icon('layout') %> Текст и просмотр</span></label>

@@ -2,21 +2,24 @@
  * ============================================================================
  *  routes/pages.js — страницы (статьи): просмотр, редактор, история версий
  * ============================================================================
+ *  Права: «чтение» / «правка» — это права на ПРОСТРАНСТВО страницы
+ *  (services/permissions.js). Правка требует ещё и глобальной роли editor+.
+ *
  *  Маршруты:
- *    GET  /spaces/:key/pages/new?parent=ID  — редактор новой страницы (editor+)
- *    POST /spaces/:key/pages                — создание страницы          (editor+)
- *    GET  /pages/:id/edit                   — редактор существующей      (editor+)
- *    POST /pages/:id                        — сохранение новой версии    (editor+)
- *    POST /pages/:id/delete                 — удаление                   (editor+)
- *    GET  /pages/:id/history                — список версий
- *    GET  /pages/:id/versions/:v            — просмотр старой версии
- *    GET  /pages/:id/diff?from=&to=         — сравнение двух версий
- *    POST /pages/:id/versions/:v/restore    — откат к версии             (editor+)
- *    GET  /pages/:id/export.md              — скачать как Markdown
- *    POST /pages/:id/favorite               — добавить/убрать из избранного
- *    POST /pages/:id/comments               — добавить комментарий
- *    POST /comments/:id/delete              — удалить комментарий (автор/админ)
- *    GET  /pages/:id{/:slug}                — ПРОСМОТР страницы
+ *    GET  /spaces/:key/pages/new?parent=ID  — редактор новой страницы   (правка)
+ *    POST /spaces/:key/pages                — создание страницы         (правка)
+ *    GET  /pages/:id/edit                   — редактор существующей     (правка)
+ *    POST /pages/:id                        — сохранение новой версии   (правка)
+ *    POST /pages/:id/delete                 — удаление                  (правка)
+ *    GET  /pages/:id/history                — список версий             (чтение)
+ *    GET  /pages/:id/versions/:v            — просмотр старой версии    (чтение)
+ *    GET  /pages/:id/diff?from=&to=         — сравнение двух версий     (чтение)
+ *    POST /pages/:id/versions/:v/restore    — откат к версии            (правка)
+ *    GET  /pages/:id/export.md              — скачать как Markdown      (чтение)
+ *    POST /pages/:id/favorite               — избранное                 (чтение + вход)
+ *    POST /pages/:id/comments               — добавить комментарий      (чтение + вход)
+ *    POST /comments/:id/delete              — удалить комментарий (автор, владелец пространства, админ)
+ *    GET  /pages/:id{/:slug}                — ПРОСМОТР страницы         (чтение)
  *
  *  ВАЖНО про порядок: маршрут просмотра /pages/:id{/:slug} объявлен
  *  ПОСЛЕДНИМ. Иначе адрес /pages/5/history совпал бы с ним (slug="history")
@@ -28,14 +31,15 @@ import { Router } from 'express';
 import { many, one, query, transaction } from '../db/pool.js';
 import { requireLogin, requireRole } from '../middleware/auth.js';
 import { buildLineDiff } from '../services/diff.js';
-import { renderMarkdown, slugify } from '../services/markdown.js';
+import { renderMarkdown, renderPageCached, slugify } from '../services/markdown.js';
 import {
-  flattenTree, getAncestors, getSpaceTree, isDescendant, linkAttachments, pageUrl, readPageForm, setPageLabels,
+  flattenTree, getAncestors, getChildNodes, getSpaceTree, getSpaceTreeAround, isDescendant, linkAttachments, pageUrl, readPageForm, setPageLabels,
 } from '../services/pages.js';
+import { getSpaceAccess, requireSpaceAccess } from '../services/permissions.js';
 import { getSettings } from '../services/settings.js';
 import { hasRole } from '../services/users.js';
 import { backUrl, HttpError, parseId } from '../utils/http.js';
-import { loadSpace } from './spaces.js';
+import { loadSpace, loadSpaceWithAccess } from './spaces.js';
 
 export const pagesRouter = Router();
 
@@ -47,6 +51,7 @@ async function loadPage(id) {
   const page = await one(
     `SELECT p.*,
             s.key AS space_key, s.name AS space_name, s.icon AS space_icon, s.color AS space_color,
+            s.owner_id AS space_owner_id, s.visibility AS space_visibility, s.edit_policy AS space_edit_policy,
             cu.display_name AS created_by_name,
             uu.display_name AS updated_by_name
        FROM pages p
@@ -58,6 +63,24 @@ async function loadPage(id) {
   );
   if (!page) throw new HttpError(404, 'Страница не найдена');
   return page;
+}
+
+/* ----------------------------------------------------------------------------
+ * loadPageFor — страница + права текущего пользователя на её пространство
+ * с немедленной проверкой нужного уровня ('read' | 'edit'):
+ *     const { page, access } = await loadPageFor(req, req.params.id, 'edit');
+ * Нет прав → 401 (гость) или 403, см. services/permissions.js.
+ * ------------------------------------------------------------------------- */
+async function loadPageFor(req, rawId, level) {
+  const page = await loadPage(parseId(rawId));
+  const access = await getSpaceAccess(req.user, {
+    id: page.space_id,
+    owner_id: page.space_owner_id,
+    visibility: page.space_visibility,
+    edit_policy: page.space_edit_policy,
+  });
+  requireSpaceAccess(req, access, level);
+  return { page, access };
 }
 
 /** Метки страницы строкой "api, backend" — для поля ввода в редакторе. */
@@ -110,7 +133,8 @@ async function renderEditor(res, { space, page = null, form, errors = [], baseVe
 /* ======================== СОЗДАНИЕ СТРАНИЦЫ ============================== */
 
 pagesRouter.get('/spaces/:key/pages/new', requireRole('editor'), async (req, res) => {
-  const space = await loadSpace(req.params.key);
+  const { space, access } = await loadSpaceWithAccess(req, req.params.key);
+  requireSpaceAccess(req, access, 'edit');
   const parentId = Number.parseInt(req.query.parent, 10);
   await renderEditor(res, {
     space,
@@ -126,7 +150,8 @@ pagesRouter.get('/spaces/:key/pages/new', requireRole('editor'), async (req, res
 });
 
 pagesRouter.post('/spaces/:key/pages', requireRole('editor'), async (req, res) => {
-  const space = await loadSpace(req.params.key);
+  const { space, access } = await loadSpaceWithAccess(req, req.params.key);
+  requireSpaceAccess(req, access, 'edit');
   const { form, errors } = readPageForm(req.body);
   const parentError = await validateParent(form.parent_id, space.id);
   if (parentError) errors.push(parentError);
@@ -157,7 +182,7 @@ pagesRouter.post('/spaces/:key/pages', requireRole('editor'), async (req, res) =
 /* ====================== РЕДАКТИРОВАНИЕ СТРАНИЦЫ ========================== */
 
 pagesRouter.get('/pages/:id/edit', requireRole('editor'), async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page } = await loadPageFor(req, req.params.id, 'edit');
   const space = await loadSpace(page.space_key);
   await renderEditor(res, {
     space,
@@ -185,7 +210,7 @@ pagesRouter.get('/pages/:id/edit', requireRole('editor'), async (req, res) => {
  * осознанно.
  * ------------------------------------------------------------------------- */
 pagesRouter.post('/pages/:id', requireRole('editor'), async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page } = await loadPageFor(req, req.params.id, 'edit');
   const space = await loadSpace(page.space_key);
   const { form, errors } = readPageForm(req.body);
   const baseVersion = Number.parseInt(req.body.base_version, 10);
@@ -249,7 +274,7 @@ pagesRouter.post('/pages/:id', requireRole('editor'), async (req, res) => {
  *  - with_children=1 — удаляется всё поддерево (рекурсивный CTE).
  * ========================================================================= */
 pagesRouter.post('/pages/:id/delete', requireRole('editor'), async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page } = await loadPageFor(req, req.params.id, 'edit');
   const withChildren = req.body.with_children === '1';
 
   await transaction(async (db) => {
@@ -276,7 +301,7 @@ pagesRouter.post('/pages/:id/delete', requireRole('editor'), async (req, res) =>
 /* ========================= ИСТОРИЯ ВЕРСИЙ ================================ */
 
 pagesRouter.get('/pages/:id/history', async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page, access } = await loadPageFor(req, req.params.id, 'read');
   const versions = await many(
     `SELECT v.version, v.title, v.change_note, v.created_at, length(v.content) AS size,
             u.display_name AS author_name
@@ -286,7 +311,7 @@ pagesRouter.get('/pages/:id/history', async (req, res) => {
       ORDER BY v.version DESC`,
     [page.id],
   );
-  res.render('pages/history', { title: `История: ${page.title}`, page, versions });
+  res.render('pages/history', { title: `История: ${page.title}`, page, versions, access });
 });
 
 /** Загрузка конкретной версии страницы (404, если такой нет). */
@@ -302,10 +327,10 @@ async function loadVersion(pageId, version) {
 }
 
 pagesRouter.get('/pages/:id/versions/:version', async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page, access } = await loadPageFor(req, req.params.id, 'read');
   const version = await loadVersion(page.id, parseId(req.params.version));
   const { html } = renderMarkdown(version.content);
-  res.render('pages/version', { title: `${version.title} (версия ${version.version})`, page, version, contentHtml: html });
+  res.render('pages/version', { title: `${version.title} (версия ${version.version})`, page, version, contentHtml: html, access });
 });
 
 /* ------------------------- Сравнение версий ------------------------------
@@ -313,7 +338,7 @@ pagesRouter.get('/pages/:id/versions/:version', async (req, res) => {
  * меняем их местами, чтобы «старое» всегда было слева.
  * ------------------------------------------------------------------------- */
 pagesRouter.get('/pages/:id/diff', async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page } = await loadPageFor(req, req.params.id, 'read');
   let to = Number.parseInt(req.query.to, 10) || page.version;
   let from = Number.parseInt(req.query.from, 10) || Math.max(1, to - 1);
   if (from > to) [from, to] = [to, from];
@@ -328,7 +353,7 @@ pagesRouter.get('/pages/:id/diff', async (req, res) => {
  * Так всегда можно «откатить откат».
  * ------------------------------------------------------------------------- */
 pagesRouter.post('/pages/:id/versions/:version/restore', requireRole('editor'), async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page } = await loadPageFor(req, req.params.id, 'edit');
   const old = await loadVersion(page.id, parseId(req.params.version));
 
   await transaction(async (db) => {
@@ -351,7 +376,7 @@ pagesRouter.post('/pages/:id/versions/:version/restore', requireRole('editor'), 
 /* ============================== ЭКСПОРТ ================================== */
 
 pagesRouter.get('/pages/:id/export.md', async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page } = await loadPageFor(req, req.params.id, 'read');
   /* res.attachment корректно кодирует кириллицу в имени файла (filename*). */
   res.attachment(`${slugify(page.title) || `page-${page.id}`}.md`);
   res.type('text/markdown; charset=utf-8');
@@ -362,7 +387,7 @@ pagesRouter.get('/pages/:id/export.md', async (req, res) => {
  * Переключатель: если запись была — удаляем, если не было — добавляем.
  * ========================================================================= */
 pagesRouter.post('/pages/:id/favorite', requireLogin, async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page } = await loadPageFor(req, req.params.id, 'read');
   const removed = await query('DELETE FROM favorites WHERE user_id = $1 AND page_id = $2', [req.user.id, page.id]);
   if (removed.rowCount === 0) {
     await query('INSERT INTO favorites (user_id, page_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, page.id]);
@@ -374,7 +399,8 @@ pagesRouter.post('/pages/:id/favorite', requireLogin, async (req, res) => {
 
 pagesRouter.post('/pages/:id/comments', requireLogin, async (req, res) => {
   if (!getSettings().allow_comments) throw new HttpError(403, 'Комментарии отключены администратором');
-  const page = await loadPage(parseId(req.params.id));
+  /* Комментировать может любой, кто видит страницу (включая читателей). */
+  const { page } = await loadPageFor(req, req.params.id, 'read');
   const content = String(req.body.content ?? '').replace(/\r\n?/g, '\n').trim();
 
   if (!content) req.flash('error', 'Комментарий не может быть пустым');
@@ -389,19 +415,34 @@ pagesRouter.post('/pages/:id/comments', requireLogin, async (req, res) => {
   return res.redirect(`${pageUrl(page)}#comments`);
 });
 
-/* Удалить комментарий может его автор или администратор. */
+/* Удалить комментарий может его автор, владелец пространства (модерация
+ * своего раздела) или администратор. */
 pagesRouter.post('/comments/:id/delete', requireLogin, async (req, res) => {
   const comment = await one(
     'SELECT c.id, c.author_id, p.id AS page_id, p.title FROM comments c JOIN pages p ON p.id = c.page_id WHERE c.id = $1',
     [parseId(req.params.id)],
   );
   if (!comment) throw new HttpError(404, 'Комментарий не найден');
-  if (comment.author_id !== req.user.id && !hasRole(req.user, 'admin')) {
-    throw new HttpError(403, 'Удалить комментарий может только автор или администратор');
+  const { access } = await loadPageFor(req, comment.page_id, 'read');
+  if (comment.author_id !== req.user.id && !access.canManage) {
+    throw new HttpError(403, 'Удалить комментарий может автор, владелец пространства или администратор');
   }
   await query('DELETE FROM comments WHERE id = $1', [comment.id]);
   req.flash('success', 'Комментарий удалён');
   return res.redirect(`${pageUrl({ id: comment.page_id, title: comment.title })}#comments`);
+});
+
+/* =================== ПОДГРУЗКА ВЕТКИ ДЕРЕВА НАВИГАЦИИ ======================
+ * Боковая панель показывает только путь к открытой странице (см.
+ * getSpaceTreeAround). Когда пользователь раскрывает свёрнутую ветку,
+ * public/js/app.js запрашивает её здесь и получает готовый HTML — тот же
+ * шаблон partials/page-tree, поэтому вид веток одинаковый. Права — как
+ * на чтение самой страницы.
+ * ========================================================================= */
+pagesRouter.get('/api/pages/:id/children', async (req, res) => {
+  const { page } = await loadPageFor(req, req.params.id, 'read');
+  const nodes = await getChildNodes(page.id);
+  return res.render('partials/page-tree', { nodes });
 });
 
 /* ======================== ПРОСМОТР СТРАНИЦЫ ==============================
@@ -410,7 +451,7 @@ pagesRouter.post('/comments/:id/delete', requireLogin, async (req, res) => {
  * актуальный адрес — старые ссылки продолжают работать.
  * ========================================================================= */
 pagesRouter.get('/pages/:id{/:slug}', async (req, res) => {
-  const page = await loadPage(parseId(req.params.id));
+  const { page, access } = await loadPageFor(req, req.params.id, 'read');
 
   const canonical = pageUrl(page);
   if (req.params.slug !== undefined && encodeURIComponent(req.params.slug) !== canonical.split('/')[3]) {
@@ -420,7 +461,7 @@ pagesRouter.get('/pages/:id{/:slug}', async (req, res) => {
   /* Все данные для страницы загружаются параллельно. */
   const [space, tree, ancestors, children, labels, comments, attachments, favorite] = await Promise.all([
     loadSpace(page.space_key),
-    getSpaceTree(page.space_id),
+    getSpaceTreeAround(page.space_id, page.id),
     getAncestors(page.id),
     many('SELECT id, title FROM pages WHERE parent_id = $1 ORDER BY position, lower(title)', [page.id]),
     many(
@@ -446,12 +487,15 @@ pagesRouter.get('/pages/:id{/:slug}', async (req, res) => {
       : null,
   ]);
 
-  const { html, toc } = renderMarkdown(page.content);
+  const { html, toc } = renderPageCached(page);
 
   return res.render('pages/show', {
     title: page.title,
     page,
     space,
+    /* Права на пространство: шаблон показывает кнопки правки только тем,
+     * кто действительно может править (сами маршруты проверяют это ещё раз). */
+    access,
     tree,
     ancestors,
     children,

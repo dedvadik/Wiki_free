@@ -3,10 +3,10 @@
  *  routes/uploads.js — загрузка и отдача вложений (картинки, документы)
  * ============================================================================
  *  Маршруты:
- *    POST /api/uploads               — загрузка файла из редактора (editor+),
+ *    POST /api/uploads               — загрузка файла из редактора (право правки страницы),
  *                                      отвечает JSON с готовой Markdown-ссылкой
- *    GET  /uploads/:name             — скачивание/просмотр файла
- *    POST /attachments/:id/delete    — удаление вложения (editor+)
+ *    GET  /uploads/:name             — скачивание/просмотр файла (право чтения пространства)
+ *    POST /attachments/:id/delete    — удаление вложения (право правки страницы)
  *
  *  Меры безопасности:
  *   - файл сохраняется под СЛУЧАЙНЫМ именем (UUID) — пользователь не может
@@ -25,9 +25,27 @@ import multer from 'multer';
 import { config } from '../config.js';
 import { one, query } from '../db/pool.js';
 import { requireRole } from '../middleware/auth.js';
+import { getSpaceAccess } from '../services/permissions.js';
+import { hasRole } from '../services/users.js';
 import { backUrl, HttpError, parseId } from '../utils/http.js';
 
 export const uploadsRouter = Router();
+
+/* ----------------------------------------------------------------------------
+ * Права пользователя на пространство, которому принадлежит страница.
+ * null — страницы нет (файл «ничей»: загружен для ещё не сохранённой
+ * страницы или страницу удалили).
+ * ------------------------------------------------------------------------- */
+async function accessForPage(user, pageId) {
+  if (!pageId) return null;
+  const space = await one(
+    `SELECT s.id, s.owner_id, s.visibility, s.edit_policy
+       FROM pages p JOIN spaces s ON s.id = p.space_id
+      WHERE p.id = $1`,
+    [pageId],
+  );
+  return space ? getSpaceAccess(user, space) : null;
+}
 
 /* Расширения и MIME-типы, которые безопасно показывать прямо в браузере. */
 const INLINE_IMAGE_EXT = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.bmp', '.ico']);
@@ -76,6 +94,15 @@ uploadsRouter.post(
     const pageId = Number.parseInt(req.body.page_id, 10);
     const page = Number.isInteger(pageId) ? await one('SELECT id FROM pages WHERE id = $1', [pageId]) : null;
 
+    /* Загружать в страницу может только тот, кто может её править.
+     * multer уже записал файл на диск (page_id приходит в том же
+     * multipart-теле) — при отказе удаляем его. */
+    const access = await accessForPage(req.user, page?.id);
+    if (access && !access.canEdit) {
+      await fs.unlink(req.file.path).catch(() => {});
+      return res.status(403).json({ error: 'Нет прав на редактирование в этом пространстве' });
+    }
+
     const originalName = req.file.originalname.slice(0, 255);
     const { rows: [attachment] } = await query(
       `INSERT INTO attachments (page_id, stored_name, original_name, mime_type, size_bytes, uploaded_by)
@@ -99,7 +126,9 @@ uploadsRouter.post(
 
 /* =============================== ОТДАЧА ==================================
  * Маршрут подключён ПОСЛЕ siteAccess — в закрытой вики файлы тоже
- * доступны только вошедшим пользователям.
+ * доступны только вошедшим пользователям. Файл страницы из закрытого
+ * пространства отдаётся только тем, кто может это пространство читать;
+ * остальным — 404, как будто файла нет (не раскрываем его существование).
  * ========================================================================= */
 uploadsRouter.get('/uploads/:name', async (req, res) => {
   const { name } = req.params;
@@ -108,6 +137,8 @@ uploadsRouter.get('/uploads/:name', async (req, res) => {
 
   const file = await one('SELECT * FROM attachments WHERE stored_name = $1', [name]);
   if (!file) throw new HttpError(404, 'Файл не найден');
+  const access = await accessForPage(req.user, file.page_id);
+  if (access && !access.canRead) throw new HttpError(404, 'Файл не найден');
 
   const inline = INLINE_IMAGE_EXT.has(path.extname(name)) && file.mime_type.startsWith('image/');
 
@@ -131,9 +162,14 @@ uploadsRouter.get('/uploads/:name', async (req, res) => {
 
 /* =============================== УДАЛЕНИЕ ================================ */
 
+/* Удалить вложение страницы может тот, кто может её править; «ничейное»
+ * вложение — загрузивший его пользователь или администратор. */
 uploadsRouter.post('/attachments/:id/delete', requireRole('editor'), async (req, res) => {
   const file = await one('SELECT * FROM attachments WHERE id = $1', [parseId(req.params.id)]);
   if (!file) throw new HttpError(404, 'Вложение не найдено');
+  const access = await accessForPage(req.user, file.page_id);
+  const allowed = access ? access.canEdit : (file.uploaded_by === req.user.id || hasRole(req.user, 'admin'));
+  if (!allowed) throw new HttpError(403, 'Нет прав на удаление этого вложения');
 
   await query('DELETE FROM attachments WHERE id = $1', [file.id]);
   /* Файл на диске удаляем после записи в БД; если его уже нет — не страшно. */

@@ -20,8 +20,9 @@ middleware/  ← то, что выполняется для каждого за�
 | `middleware/` | `auth`, `csrf`, `locals`, `errors` | [Middleware](page:Middleware) |
 | `services/settings.js`, `theme.js`, `themes.js` | настройки, генерация `/theme.css`, реестр тем | [Настройки сайта](page:Настройки сайта), [Стили и темы оформления](page:Стили и темы оформления) |
 | `services/markdown.js`, `pages.js`, `diff.js` | разметка, дерево, сравнение версий | [Статьи: разметка, дерево, версии, поиск](page:Статьи: разметка, дерево, версии, поиск) |
-| `services/users.js`, `auth.js`, `ldap.js` | пользователи и вход | [Пользователи, вход и LDAP](page:Пользователи, вход и LDAP) |
-| `services/bootstrap.js`, `tools/import-docs.js` | первый запуск, импорт документации | [Первый запуск и импорт документации](page:Первый запуск и импорт документации) |
+| `services/users.js`, `auth.js`, `ldap.js`, `password-pool.js`, `password-worker.js` | пользователи и вход; bcrypt в пуле потоков | [Пользователи, вход и LDAP](page:Пользователи, вход и LDAP) |
+| `services/permissions.js` | права на пространства: вычисление, проверка, SQL-фильтры | [Права доступа к пространствам](page:Права доступа к пространствам) |
+| `services/bootstrap.js`, `tools/import-docs.js`, `tools/seed-load.js` | первый запуск, импорт документации, тестовые данные для нагрузки | [Первый запуск и импорт документации](page:Первый запуск и импорт документации) |
 | `utils/http.js` | `HttpError`, `parseId`, `safeReturnTo`, `backUrl`, `regenerateSession` | ниже |
 | `utils/format.js` | даты, «5 минут назад», размер файла, склонение, `authorName`, `avatarHue` | ниже |
 | `utils/icons.js` | SVG-иконки для шаблонов | [Шаблоны EJS](page:Шаблоны EJS) |

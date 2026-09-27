@@ -11,6 +11,7 @@
      6. подсветка текущего раздела в оглавлении при прокрутке;
      7. печать страницы;
      8. настройки этого браузера на странице «Настройки → Оформление».
+     9. подгрузка свёрнутых веток дерева страниц.
    ============================================================================ */
 (function () {
   'use strict';
@@ -133,14 +134,17 @@
 
   /* ---------------------------------------------------------------------
      8. Настройки этого браузера («Настройки → Оформление»): радиокнопки с
-        data-pref="color-mode" | "editor-mode". Значение хранится в
+        data-pref="color-mode" | "editor-mode" | "editor-type". Значение хранится в
         localStorage и применяется сразу, без отправки формы:
           color-mode  — light | dark | auto (его читает theme-init.js);
           editor-mode — edit | split | preview (его читает editor.js).
+          editor-type — visual | markdown (его читает editor.js).
      --------------------------------------------------------------------- */
   const PREF_DEFAULTS = {
     'color-mode': () => document.documentElement.dataset.defaultMode || 'light',
     'editor-mode': () => 'split',
+    // Тип редактора: по умолчанию — выбранный администратором (атрибут <html>).
+    'editor-type': () => document.documentElement.dataset.defaultEditor || 'visual',
   };
   const readPref = (key) => {
     try { return localStorage.getItem(key); } catch { return null; }
@@ -162,4 +166,30 @@
       }
     });
   });
+
+  /* ---------------------------------------------------------------------
+     9. Дерево страниц в боковой панели. Сервер присылает только путь к
+        открытой странице; остальные ветки приходят свёрнутыми
+        (<details data-tree-lazy="id"> с «Загрузка…» внутри). При первом
+        раскрытии ветки подгружаем её HTML с /api/pages/:id/children.
+        Событие toggle не всплывает, поэтому слушаем его на фазе
+        перехвата (третий аргумент true) — один обработчик на всю страницу,
+        он работает и для веток, подгруженных позже.
+     --------------------------------------------------------------------- */
+  document.addEventListener('toggle', async (event) => {
+    const branch = event.target;
+    if (!(branch instanceof HTMLDetailsElement) || !branch.open || !branch.dataset.treeLazy) return;
+    const id = branch.dataset.treeLazy;
+    delete branch.dataset.treeLazy; /* не загружать повторно */
+    const placeholder = branch.querySelector(':scope > ul.tree');
+    try {
+      const response = await fetch(`/api/pages/${encodeURIComponent(id)}/children`, { headers: { Accept: 'text/html' } });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      /* HTML собран сервером из шаблона page-tree (названия экранированы). */
+      placeholder.outerHTML = await response.text();
+    } catch {
+      branch.dataset.treeLazy = id; /* дать попробовать ещё раз */
+      placeholder.innerHTML = '<li class="tree-loading muted small">Не удалось загрузить — сверните и раскройте ещё раз</li>';
+    }
+  }, true);
 })();
