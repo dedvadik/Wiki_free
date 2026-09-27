@@ -1,0 +1,194 @@
+{{/* ===========================================================================
+  БЛОК «web» — копии приложения (Deployment).
+
+  Жизненный цикл копии:
+   1. init-контейнер prepare-db: напрямую к основному PostgreSQL применяет
+      миграции, создаёт администратора/демо и публикует документацию — под
+      advisory-блокировками, поэтому безопасно при любом числе копий;
+   2. основной контейнер стартует с RUN_MIGRATIONS=false и ходит в базу
+      через PgBouncer;
+   3. проверки: startupProbe (/livez) — дать время на запуск;
+      readinessProbe (/healthz: процесс + база) — принимать ли трафик;
+      livenessProbe (/livez, БЕЗ базы) — перезапустить зависший процесс
+      (сбой базы не должен перезапускать все копии разом);
+   4. остановка: SIGTERM → /healthz отвечает 503 → копия выходит из
+      балансировки → дорабатывает запросы → выход (terminationGracePeriod
+      с запасом).
+=========================================================================== */}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "wikispace.web" . }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  {{- /* При включённом автомасштабировании число копий задаёт HPA/KEDA:
+         не указываем replicas, иначе helm upgrade сбрасывал бы его. */}}
+  {{- if not (or .Values.web.autoscaling.enabled .Values.keda.enabled) }}
+  replicas: {{ .Values.web.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "wikispace.webSelector" . | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # Обновление без простоя: сначала поднимается новая копия, и только
+      # когда она готова (readiness), гасится старая.
+      maxSurge: 25%
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "wikispace.webSelector" . | nindent 8 }}
+        {{- with .Values.web.podLabels }}{{ toYaml . | nindent 8 }}{{- end }}
+      annotations:
+        # Изменились настройки или файлы кастомизации — копии перезапускаются.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/custom: {{ include (print $.Template.BasePath "/custom-configmap.yaml") . | sha256sum }}
+        # Копию можно переносить между узлами (автоскейлер кластера убирает
+        # недогруженные узлы) — она не хранит состояния.
+        cluster-autoscaler.kubernetes.io/safe-to-evict: "true"
+        {{- if .Values.web.metrics.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.web.metrics.port | quote }}
+        prometheus.io/path: /metrics
+        {{- end }}
+        {{- with .Values.web.podAnnotations }}{{ toYaml . | nindent 8 }}{{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ add .Values.web.shutdownDelaySeconds .Values.web.shutdownTimeoutSeconds 5 }}
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000   # пользователь node из образа node:alpine
+        runAsGroup: 1000
+        fsGroup: 1000     # том загрузок доступен на запись этому пользователю
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: prepare-db
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["node", "src/tools/prepare.js"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "wikispace.fullname" . }}-config
+          env:
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wikispace.secret" . }}
+                  key: ADMIN_PASSWORD
+            - name: DOCS_IMPORT
+              value: {{ .Values.app.importDocs | quote }}
+            {{- include "wikispace.dbEnv" (dict "root" . "direct" true) | nindent 12 }}
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: "1", memory: 384Mi }
+          securityContext: &containerSecurity
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: web
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+            {{- if .Values.web.metrics.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.web.metrics.port }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "wikispace.fullname" . }}-config
+          env:
+            - name: RUN_MIGRATIONS
+              value: "false"
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "wikispace.secret" . }}
+                  key: SESSION_SECRET
+            {{- include "wikispace.dbEnv" (dict "root" . "direct" false) | nindent 12 }}
+          startupProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 2
+            failureThreshold: 30      # до 60 с на запуск
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          livenessProbe:
+            httpGet: { path: /livez, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.web.resources | nindent 12 }}
+          securityContext: *containerSecurity
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: custom
+              mountPath: /app/custom
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-uploads" (include "wikispace.fullname" .)) .Values.persistence.existingClaim }}
+          {{- else }}
+          emptyDir: {}   # только для тестов: файлы пропадут при перезапуске
+          {{- end }}
+        - name: custom
+          configMap:
+            name: {{ include "wikispace.fullname" . }}-custom
+            {{- if .Values.custom.files }}
+            items:
+              {{- range $path, $_ := .Values.custom.files }}
+              - key: {{ $path | replace "/" "__" | quote }}
+                path: {{ $path | quote }}
+              {{- end }}
+            {{- end }}
+        - name: tmp
+          emptyDir: {}
+      {{- if .Values.web.topologySpread.enabled }}
+      # Каждая копия — на своём узле и по возможности в своей зоне доступности.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: {{ .Values.web.topologySpread.nodeWhenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "wikispace.webSelector" . | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: {{ .Values.web.topologySpread.zoneWhenUnsatisfiable }}
+          labelSelector:
+            matchLabels:
+              {{- include "wikispace.webSelector" . | nindent 14 }}
+      {{- end }}
+      {{- with .Values.web.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.web.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+      {{- end }}

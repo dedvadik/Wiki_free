@@ -33,6 +33,55 @@ pool.on('error', (err) => {
 });
 
 /* ----------------------------------------------------------------------------
+ * Пул для ЧТЕНИЯ (необязательный). Если задан DATABASE_READ_URL — например,
+ * сервис реплик PostgreSQL в Kubernetes (CloudNativePG: <кластер>-ro), —
+ * тяжёлые запросы только на чтение (поиск) идут на реплики и не нагружают
+ * основной сервер, который принимает все изменения. Реплики отстают от
+ * основного сервера на доли секунды — для поиска это незаметно.
+ * Без DATABASE_READ_URL readPool — это тот же основной пул.
+ * ------------------------------------------------------------------------- */
+export const readPool = config.databaseReadUrl
+  ? new pg.Pool({ connectionString: config.databaseReadUrl, max: config.dbPoolMax, idleTimeoutMillis: 30_000 })
+  : pool;
+if (readPool !== pool) {
+  readPool.on('error', (err) => console.error('[db] Ошибка соединения с репликой:', err.message));
+}
+
+/** Как many(), но через пул чтения (реплики, если они настроены). */
+export async function readMany(text, params = []) {
+  const { rows } = await readPool.query(text, params);
+  return rows;
+}
+
+/** Закрыть все пулы (при остановке сервера и в консольных скриптах). */
+export async function closePools() {
+  await pool.end().catch(() => {});
+  if (readPool !== pool) await readPool.end().catch(() => {});
+}
+
+/* ----------------------------------------------------------------------------
+ * withAdvisoryLock(id, fn) — выполнить fn, пока удерживается advisory-
+ * блокировка PostgreSQL с номером id. Нужна, когда запущено НЕСКОЛЬКО копий
+ * приложения (Kubernetes, docker compose --scale): они стартуют одновременно,
+ * и без блокировки обе могли бы, например, создать администратора на пустой
+ * базе. Вторая копия ждёт, пока первая закончит, и видит уже готовый результат.
+ * Блокировка привязана к соединению, поэтому берётся отдельный клиент;
+ * через PgBouncer в режиме транзакций такие блокировки не работают —
+ * подготовку базы запускайте с прямым адресом PostgreSQL (в Helm-чарте
+ * init-контейнер получает DATABASE_URL мимо пулера соединений).
+ * ------------------------------------------------------------------------- */
+export async function withAdvisoryLock(lockId, fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('SELECT pg_advisory_lock($1)', [lockId]);
+    return await fn();
+  } finally {
+    await client.query('SELECT pg_advisory_unlock($1)', [lockId]).catch(() => {});
+    client.release();
+  }
+}
+
+/* ----------------------------------------------------------------------------
  * Короткие обёртки над pool.query, чтобы в маршрутах писать меньше кода:
  *   query(sql, params) → полный результат (rows, rowCount, ...)
  *   many(sql, params)  → массив строк

@@ -1,0 +1,38 @@
+{{/* ===========================================================================
+  Общие несекретные настройки приложения (переменные окружения) — для
+  основного контейнера web и init-контейнера подготовки базы.
+  Изменение этого ConfigMap перезапускает копии web по очереди (в
+  Deployment есть аннотация с его контрольной суммой).
+=========================================================================== */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wikispace.fullname" . }}-config
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+data:
+  NODE_ENV: production
+  PORT: "3000"
+  DATA_DIR: /app/data
+  CUSTOM_DIR: /app/custom
+  TZ: {{ .Values.app.timezone | quote }}
+  ADMIN_USERNAME: {{ .Values.app.adminUsername | quote }}
+  ADMIN_EMAIL: {{ .Values.app.adminEmail | quote }}
+  SEED_DEMO: {{ .Values.app.seedDemo | quote }}
+  UPLOAD_MAX_MB: {{ .Values.app.uploadMaxMb | quote }}
+  VIDEO_MAX_MB: {{ .Values.app.videoMaxMb | quote }}
+  SESSION_MAX_AGE_DAYS: {{ .Values.app.sessionMaxAgeDays | quote }}
+  AUTH_RATE_LIMIT: {{ .Values.app.authRateLimit | quote }}
+  DB_POOL_MAX: {{ .Values.web.dbPoolMax | quote }}
+  SETTINGS_SYNC_SECONDS: {{ .Values.web.settingsSyncSeconds | quote }}
+  SHUTDOWN_DELAY_SECONDS: {{ .Values.web.shutdownDelaySeconds | quote }}
+  SHUTDOWN_TIMEOUT_SECONDS: {{ .Values.web.shutdownTimeoutSeconds | quote }}
+  METRICS_PORT: {{ ternary .Values.web.metrics.port 0 .Values.web.metrics.enabled | quote }}
+  NODE_OPTIONS: {{ printf "--max-old-space-size=%d" (int .Values.web.nodeHeapMb) | quote }}
+  {{- /* Перед приложением — Ingress-контроллер: доверяем одному прокси
+         (реальный IP клиента для лимита попыток входа). */}}
+  TRUST_PROXY: "1"
+  COOKIE_SECURE: {{ .Values.ingress.tls.enabled | quote }}
+  {{- range $key, $value := .Values.app.extraEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

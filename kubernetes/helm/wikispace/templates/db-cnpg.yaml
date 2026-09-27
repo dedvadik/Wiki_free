@@ -1,0 +1,152 @@
+{{/* ===========================================================================
+  БЛОК «database» (mode: cnpg) — кластер PostgreSQL под управлением
+  оператора CloudNativePG.
+
+  Что даёт оператор:
+   - instances экземпляров: 1 основной (запись) + реплики (потоковая
+     репликация), каждый на своём узле (podAntiAffinity);
+   - автоматическое переключение: упал основной — оператор за ~10–30 с
+     назначает основным самую свежую реплику и перенастраивает сервисы
+     <кластер>-rw / -ro; приложение переподключается само (пул pg);
+   - сервисы: -rw (основной), -ro (реплики), -r (любой);
+   - Secret <кластер>-app с логином/паролем владельца базы;
+   - резервные копии в S3 и восстановление на момент времени (backup).
+
+  Пулеры PgBouncer — отдельные независимые блоки со своими копиями:
+   - pooler-rw → основной сервер (все изменения и обычные чтения);
+   - pooler-ro → реплики (поиск, страница меток: DATABASE_READ_URL).
+=========================================================================== */}}
+{{- if eq .Values.postgresql.mode "cnpg" }}
+{{- $db := include "wikispace.db" . }}
+{{- $cnpg := .Values.postgresql.cnpg }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $db }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  instances: {{ $cnpg.instances }}
+  {{- with $cnpg.imageName }}
+  imageName: {{ . }}
+  {{- end }}
+  # Обновления оператора и версии PostgreSQL — сначала реплики, затем
+  # переключение основного на обновлённую реплику (без простоя записи
+  # дольше нескольких секунд).
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  postgresql:
+    parameters:
+      {{- range $key, $value := $cnpg.parameters }}
+      {{ $key }}: {{ $value | quote }}
+      {{- end }}
+  bootstrap:
+    initdb:
+      database: {{ .Values.postgresql.database }}
+      owner: {{ .Values.postgresql.username }}
+  storage:
+    size: {{ $cnpg.storage.size }}
+    {{- with $cnpg.storage.storageClass }}
+    storageClass: {{ . }}
+    {{- end }}
+  resources:
+    {{- toYaml $cnpg.resources | nindent 4 }}
+  affinity:
+    # Каждый экземпляр PostgreSQL — на отдельном узле.
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: {{ $cnpg.podAntiAffinityType }}
+    {{- with $cnpg.nodeSelector }}
+    nodeSelector: {{ toYaml . | nindent 6 }}
+    {{- end }}
+    {{- with $cnpg.tolerations }}
+    tolerations: {{ toYaml . | nindent 6 }}
+    {{- end }}
+  monitoring:
+    enablePodMonitor: {{ $cnpg.enablePodMonitor }}
+  {{- with $cnpg.extraSpec }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+  {{- if $cnpg.backup.enabled }}
+  backup:
+    retentionPolicy: {{ $cnpg.backup.retentionPolicy | quote }}
+    barmanObjectStore:
+      destinationPath: {{ $cnpg.backup.destinationPath | quote }}
+      {{- with $cnpg.backup.endpointURL }}
+      endpointURL: {{ . | quote }}
+      {{- end }}
+      s3Credentials:
+        accessKeyId:
+          name: {{ $cnpg.backup.s3CredentialsSecret }}
+          key: ACCESS_KEY_ID
+        secretAccessKey:
+          name: {{ $cnpg.backup.s3CredentialsSecret }}
+          key: ACCESS_SECRET_KEY
+      wal:
+        compression: gzip
+      data:
+        compression: gzip
+  {{- end }}
+{{- if $cnpg.backup.enabled }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: {{ $db }}-daily
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+spec:
+  schedule: {{ $cnpg.backup.schedule | quote }}
+  backupOwnerReference: self
+  cluster:
+    name: {{ $db }}
+{{- end }}
+{{- if .Values.postgresql.pooler.enabled }}
+{{- $pooler := .Values.postgresql.pooler }}
+{{- $types := list "rw" }}
+{{- if and $pooler.readReplicas (gt (int $cnpg.instances) 1) }}{{- $types = append $types "ro" }}{{- end }}
+{{- range $type := $types }}
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Pooler
+metadata:
+  name: {{ $db }}-pooler-{{ $type }}
+  labels:
+    {{- include "wikispace.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: pooler-{{ $type }}
+spec:
+  cluster:
+    name: {{ $db }}
+  instances: {{ $pooler.instances }}
+  type: {{ $type }}
+  pgbouncer:
+    poolMode: {{ $pooler.poolMode }}
+    parameters:
+      max_client_conn: {{ $pooler.maxClientConn | quote }}
+      default_pool_size: {{ $pooler.defaultPoolSize | quote }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: pooler-{{ $type }}
+    spec:
+      containers: []
+      # Копии пулера — на разных узлах.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    cnpg.io/poolerName: {{ $db }}-pooler-{{ $type }}
+      {{- with $pooler.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $pooler.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

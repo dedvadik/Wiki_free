@@ -1,0 +1,17 @@
+{{/* PodDisruptionBudget: при плановых работах (обновление узлов, удаление
+     недогруженного узла автоскейлером) Kubernetes не выселит копии web так,
+     чтобы их осталось меньше minAvailable — сайт не пропадёт. */}}
+{{- if .Values.web.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "wikispace.web" . }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  minAvailable: {{ .Values.web.podDisruptionBudget.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "wikispace.webSelector" . | nindent 6 }}
+{{- end }}

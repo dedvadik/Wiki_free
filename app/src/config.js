@@ -81,6 +81,24 @@ export const config = Object.freeze({
    * PGPORT. Этот вариант удобнее: пароль не нужно URL-кодировать. */
   databaseUrl: env.DATABASE_URL || undefined,
   dbPoolMax: toInt(env.DB_POOL_MAX, 10),
+  /* Необязательный адрес реплик только для чтения (см. db/pool.js, readPool). */
+  databaseReadUrl: env.DATABASE_READ_URL || undefined,
+
+  /* ---- Работа нескольких копий приложения (Kubernetes, --scale) ---- */
+  /* Выполнять ли при старте миграции и первичную настройку базы. В Kubernetes
+   * это делает init-контейнер (node src/tools/prepare.js) напрямую с
+   * PostgreSQL, а основной контейнер стартует с RUN_MIGRATIONS=false. */
+  runMigrations: toBool(env.RUN_MIGRATIONS, true),
+  /* Как часто (секунд) проверять, не изменил ли настройки сайта администратор
+   * на ДРУГОЙ копии приложения. 0 — не проверять (одна копия). */
+  settingsSyncSeconds: toInt(env.SETTINGS_SYNC_SECONDS, 15),
+  /* Остановка: сколько секунд после SIGTERM ещё принимать запросы, пока
+   * балансировщик убирает копию из ротации, и через сколько выйти принудительно. */
+  shutdownDelaySeconds: toInt(env.SHUTDOWN_DELAY_SECONDS, 0),
+  shutdownTimeoutSeconds: toInt(env.SHUTDOWN_TIMEOUT_SECONDS, 8),
+  /* Порт метрик Prometheus (/metrics) — отдельный от сайта, наружу не
+   * публикуется. 0 — метрики выключены. */
+  metricsPort: toInt(env.METRICS_PORT, 0),
 
   /* Сессии. Если SESSION_SECRET пуст, секрет будет сгенерирован
    * автоматически и сохранён в DATA_DIR (см. server.js). */

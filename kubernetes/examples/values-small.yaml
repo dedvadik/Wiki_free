@@ -1,0 +1,25 @@
+# =============================================================================
+#  Пример: тестовый кластер из одного узла (k3s, kind, minikube, Docker
+#  Desktop). Один PostgreSQL без оператора, том загрузок ReadWriteOnce
+#  (на одном узле копии web делят его без проблем), Ingress — traefik (k3s).
+#     helm install wiki ./kubernetes/helm/wikispace -f kubernetes/examples/values-small.yaml
+# =============================================================================
+ingress:
+  className: traefik
+  host: wiki.localhost
+
+web:
+  resources:
+    requests: { cpu: 250m, memory: 192Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  nodeHeapMb: 384
+  autoscaling:
+    minReplicas: 1
+    maxReplicas: 4
+
+persistence:
+  accessMode: ReadWriteOnce
+  size: 5Gi
+
+postgresql:
+  mode: simple

@@ -1,0 +1,336 @@
+# =============================================================================
+#  values.yaml — все настройки чарта WikiSpace (значения по умолчанию)
+# =============================================================================
+#  Свои значения кладите в отдельный файл и передавайте через -f:
+#     helm install wiki ./kubernetes/helm/wikispace -f my-values.yaml
+#  Готовые примеры: kubernetes/examples/values-production.yaml (боевой
+#  кластер) и values-small.yaml (тестовый кластер из одного узла).
+#
+#  Цифры для автомасштабирования взяты из нагрузочного тестирования
+#  (app/docs/portal/31-load-testing.md): одна копия приложения
+#  обрабатывает ~145 запросов/с, упираясь в одно ядро процессора; при
+#  ~0,6–0,7 ядра задержки ещё малы. Поэтому новые копии добавляются заранее —
+#  когда средняя загрузка переходит порог ниже насыщения.
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Образ приложения. Соберите и опубликуйте его в свой реестр:
+#   docker buildx bake --set '*.tags=registry.example.com/wikispace:1.0.0' --push
+# (мультиплатформенный: amd64 / arm64 / arm-v7 — узлы кластера могут быть разными).
+# ---------------------------------------------------------------------------
+image:
+  repository: wikispace
+  tag: latest
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Переопределить часть имён ресурсов (по умолчанию — имя релиза).
+nameOverride: ""
+fullnameOverride: ""
+
+# ---------------------------------------------------------------------------
+# Адрес сайта снаружи кластера (Ingress).
+# ---------------------------------------------------------------------------
+ingress:
+  enabled: true
+  # Класс контроллера: nginx (ingress-nginx), traefik (k3s), alb, …
+  className: nginx
+  host: wiki.example.com
+  tls:
+    enabled: false
+    # Секрет с сертификатом. С cert-manager он создаётся автоматически,
+    # если указать clusterIssuer.
+    secretName: wikispace-tls
+    clusterIssuer: ""
+  # Аннотации для ingress-nginx уже заданы в шаблоне (размер тела запроса
+  # под видео, таймауты, отключённая буферизация загрузок). Здесь — свои.
+  annotations: {}
+
+# ---------------------------------------------------------------------------
+# Настройки портала (те же переменные окружения, что в docker-compose.yml).
+# ---------------------------------------------------------------------------
+app:
+  adminUsername: admin
+  adminEmail: admin@example.com
+  # Пароль первого администратора. Пусто — чарт сгенерирует случайный и
+  # сохранит в Secret (команда показать его — в выводе helm install).
+  adminPassword: ""
+  seedDemo: true
+  # Публиковать документацию кода (пространство «Код портала») при каждом
+  # обновлении релиза — изменившиеся страницы получают новую версию.
+  importDocs: true
+  uploadMaxMb: 20
+  videoMaxMb: 200
+  sessionMaxAgeDays: 14
+  authRateLimit: 20
+  timezone: Europe/Moscow
+  # Свой Secret с ключами SESSION_SECRET и ADMIN_PASSWORD вместо созданного
+  # чартом (например, из Vault / Sealed Secrets).
+  existingSecret: ""
+  # Любые дополнительные переменные: SETTING_SITE_NAME, SETTING_LDAP_URL, …
+  extraEnv: {}
+  #  SETTING_SITE_NAME: "База знаний"
+
+# ---------------------------------------------------------------------------
+# БЛОК «web» — приложение. Не хранит состояния: сессии — в PostgreSQL,
+# файлы — на общем томе, поэтому копии взаимозаменяемы и их можно
+# добавлять и убирать в любой момент.
+# ---------------------------------------------------------------------------
+web:
+  # Число копий, если автомасштабирование выключено.
+  replicas: 2
+
+  # Ресурсы одной копии. requests — гарантированная доля (по ней
+  # планировщик выбирает узел и считает загрузку для HPA), limits — потолок.
+  # Node.js обрабатывает запросы в одном потоке (~1 ядро), а проверку
+  # паролей — в отдельных потоках, отсюда limits.cpu = 2.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+    limits:
+      cpu: "2"
+      memory: 768Mi
+  # Размер кучи V8 (МБ) — чуть меньше limits.memory, чтобы процесс
+  # собирал мусор, а не упирался в лимит контейнера (OOMKilled).
+  nodeHeapMb: 512
+  # Соединений с БД на одну копию. Через PgBouncer их можно много:
+  # 20 копий × 10 = 200 клиентов пулера, а к PostgreSQL — pooler.defaultPoolSize.
+  dbPoolMax: 10
+  # Как часто копии перечитывают настройки сайта, изменённые в админке
+  # на другой копии (секунд).
+  settingsSyncSeconds: 5
+
+  # ---- Автомасштабирование (HorizontalPodAutoscaler) ----
+  autoscaling:
+    enabled: true
+    # Минимум 2 копии: при падении узла или обновлении сайт продолжает работать.
+    minReplicas: 2
+    maxReplicas: 20
+    # Добавлять копии, когда средняя загрузка CPU выше этой доли от
+    # requests.cpu. 70% от 500m = 0,35 ядра ≈ 50 запросов/с на копию —
+    # с большим запасом до насыщения (~1 ядро), задержки остаются низкими.
+    targetCPUUtilizationPercentage: 70
+    # По памяти масштабироваться НЕ рекомендуется: Node.js не спешит
+    # возвращать память после пика, и HPA не смог бы убрать лишние копии.
+    # Включайте (например, 85), только если понимаете последствия.
+    targetMemoryUtilizationPercentage: 0
+    # Скорость изменения числа копий.
+    behavior:
+      scaleUp:
+        # Рост — сразу, без ожидания: всплеск нагрузки нельзя пережидать.
+        stabilizationWindowSeconds: 0
+        policies:
+          # За 15 секунд — удвоить число копий или добавить 4 (что больше).
+          - type: Percent
+            value: 100
+            periodSeconds: 15
+          - type: Pods
+            value: 4
+            periodSeconds: 15
+        selectPolicy: Max
+      scaleDown:
+        # Снижение — только если нагрузка держится низкой 5 минут
+        # (не «дёргаться» на коротких провалах), и плавно: не больше
+        # 1 копии или 10% в минуту (что меньше).
+        stabilizationWindowSeconds: 300
+        policies:
+          - type: Pods
+            value: 1
+            periodSeconds: 60
+          - type: Percent
+            value: 10
+            periodSeconds: 60
+        selectPolicy: Min
+
+  # Сколько копий может быть недоступно при плановых работах (обновление
+  # узлов, уменьшение кластера автоскейлером): всегда остаётся хотя бы одна.
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # ---- Размещение по узлам: каждая копия — на своём узле ----
+  # Копии распределяются по разным узлам (и зонам доступности), чтобы
+  # падение одного узла не останавливало сайт.
+  #   ScheduleAnyway — если узлов меньше, чем копий, лишние копии всё равно
+  #                    запустятся (на уже занятых узлах);
+  #   DoNotSchedule  — строго по одной на узел: лишние копии ждут, пока
+  #                    автоскейлер кластера добавит узлы.
+  topologySpread:
+    enabled: true
+    nodeWhenUnsatisfiable: ScheduleAnyway
+    zoneWhenUnsatisfiable: ScheduleAnyway
+  # Выделенные узлы для блока (например, пул «web»):
+  #   nodeSelector: { workload: web }
+  #   tolerations: [{ key: workload, value: web, effect: NoSchedule }]
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  priorityClassName: ""
+
+  # ---- Корректная остановка ----
+  # После SIGTERM копия shutdownDelaySeconds ещё принимает запросы, пока
+  # балансировщик выводит её из ротации (/healthz уже отвечает 503), затем
+  # до shutdownTimeoutSeconds дорабатывает начатые запросы.
+  shutdownDelaySeconds: 10
+  shutdownTimeoutSeconds: 25
+
+  # Метрики Prometheus на отдельном порту (для ServiceMonitor и KEDA).
+  metrics:
+    enabled: true
+    port: 9464
+
+  podAnnotations: {}
+  podLabels: {}
+
+# ---------------------------------------------------------------------------
+# БЛОК «storage» — общий том для загруженных файлов (картинки, видео).
+# Все копии web пишут и читают одни и те же файлы, поэтому нужен том
+# ReadWriteMany: NFS (nfs-subdir-external-provisioner), CephFS, Longhorn
+# (RWX), AWS EFS, Azure Files, Yandex Cloud — файловое хранилище.
+# На кластере из одного узла подойдёт и ReadWriteOnce.
+# ---------------------------------------------------------------------------
+persistence:
+  enabled: true
+  accessMode: ReadWriteMany
+  storageClass: ""
+  size: 20Gi
+  # Уже созданный PVC вместо нового.
+  existingClaim: ""
+
+# ---------------------------------------------------------------------------
+# Кастомизация (аналог папки custom/ в Docker): файлы монтируются в
+# /app/custom. Ключ — путь внутри custom/, значение — содержимое.
+#   custom:
+#     files:
+#       public/custom.css: |
+#         :root { --primary: #6a1b9a; }
+#       views/partials/footer.ejs: |
+#         <footer>…</footer></main></body></html>
+# Для большого набора файлов удобнее собрать свой образ: FROM wikispace +
+# COPY custom /app/custom.
+# ---------------------------------------------------------------------------
+custom:
+  files: {}
+
+# ---------------------------------------------------------------------------
+# БЛОК «database» — PostgreSQL.
+#   mode: cnpg     — кластер CloudNativePG (рекомендуется): основной сервер +
+#                    реплики на разных узлах, автоматическое переключение при
+#                    падении основного за ~10–30 с, PgBouncer, резервные копии.
+#                    Нужен оператор: helm repo add cnpg https://cloudnative-pg.github.io/charts
+#                                    helm install cnpg cnpg/cloudnative-pg -n cnpg-system --create-namespace
+#   mode: simple   — один экземпляр PostgreSQL (StatefulSet) без реплик —
+#                    ТОЛЬКО для тестов и разработки;
+#   mode: external — управляемая база (Yandex Managed PostgreSQL, RDS, …).
+# ---------------------------------------------------------------------------
+postgresql:
+  mode: cnpg
+  database: wikispace
+  username: wikispace
+
+  cnpg:
+    # Число экземпляров: 1 основной + (instances − 1) реплик.
+    instances: 3
+    # Образ PostgreSQL (пусто — версия по умолчанию оператора).
+    imageName: ""
+    storage:
+      size: 20Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    # Параметры PostgreSQL. max_connections — с запасом на PgBouncer и
+    # прямые подключения init-контейнеров.
+    parameters:
+      max_connections: "300"
+      shared_buffers: 256MB
+      effective_cache_size: 768MB
+      work_mem: 8MB
+      maintenance_work_mem: 128MB
+    # Экземпляры — на разных узлах:
+    #   preferred — по возможности (кластер из 1–2 узлов тоже работает);
+    #   required  — строго (узлов должно быть не меньше instances).
+    podAntiAffinityType: preferred
+    nodeSelector: {}
+    tolerations: []
+    # PodMonitor для Prometheus Operator.
+    enablePodMonitor: false
+    # Любые дополнительные поля спецификации Cluster CloudNativePG, например
+    # свой образ без пользователя с UID 26:
+    #   extraSpec: { postgresUID: 70, postgresGID: 70 }
+    extraSpec: {}
+    # Резервные копии в S3-совместимое хранилище (barman): база + WAL,
+    # восстановление на любой момент времени.
+    backup:
+      enabled: false
+      destinationPath: s3://wikispace-backups/
+      endpointURL: ""          # для S3-совместимых (Yandex Object Storage, MinIO)
+      s3CredentialsSecret: ""  # Secret с ключами ACCESS_KEY_ID, ACCESS_SECRET_KEY
+      retentionPolicy: 30d
+      schedule: "0 0 3 * * *"  # ежедневно в 03:00 (формат с секундами)
+
+  # PgBouncer: копии web держат много соединений, а PostgreSQL не любит
+  # тысячи подключений. Пулер собирает их в небольшой пул к серверу.
+  pooler:
+    enabled: true
+    instances: 2
+    poolMode: transaction
+    maxClientConn: "2000"
+    defaultPoolSize: "50"
+    # Отдельный пулер к РЕПЛИКАМ: поиск и страница меток идут туда и не
+    # нагружают основной сервер (DATABASE_READ_URL в приложении).
+    readReplicas: true
+    nodeSelector: {}
+    tolerations: []
+
+  simple:
+    image: postgres:17-alpine
+    storage:
+      size: 10Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+
+  external:
+    # Secret с ключами DATABASE_URL (запись, можно через пулер),
+    # DATABASE_DIRECT_URL (для миграций — напрямую, без PgBouncer в режиме
+    # транзакций) и необязательным DATABASE_READ_URL (реплики).
+    existingSecret: ""
+
+# ---------------------------------------------------------------------------
+# Масштабирование по метрикам приложения через KEDA (вместо HPA по CPU).
+# Учитывает запросы в работе (in-flight) — реагирует на всплеск раньше, чем
+# вырастет загрузка CPU. Нужны KEDA и Prometheus, собирающий метрики web.
+# ---------------------------------------------------------------------------
+keda:
+  enabled: false
+  prometheusServer: http://prometheus-server.monitoring.svc:80
+  # Сколько одновременных запросов в работе допустимо на одну копию.
+  inFlightPerReplica: 20
+  # Дополнительно — по CPU (как HPA выше).
+  cpuUtilization: 70
+  pollingInterval: 15
+  cooldownPeriod: 300
+
+# ServiceMonitor для Prometheus Operator (метрики web на порту metrics).
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}
+
+# VerticalPodAutoscaler в режиме рекомендаций: подскажет, какие requests
+# поставить копиям web по реальному потреблению (ничего не меняет сам).
+vpa:
+  enabled: false
+
+# Сетевые политики: к PostgreSQL (mode: simple) — только из web.
+networkPolicy:
+  enabled: true

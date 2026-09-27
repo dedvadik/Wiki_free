@@ -44,6 +44,7 @@
     },
     { "title": "Развёртывание в Docker", "file": "30-docker.md", "labels": ["docker", "devops"] },
     { "title": "Нагрузочное тестирование", "file": "31-load-testing.md", "labels": ["нагрузка", "производительность", "devops"] },
+    { "title": "Kubernetes: отказоустойчивость и автомасштабирование", "file": "32-kubernetes.md", "labels": ["kubernetes", "масштабирование", "devops"] },
     { "title": "Как расширять портал", "file": "40-extending.md", "labels": ["рецепты", "код"] }
   ]
 }

@@ -1,0 +1,94 @@
+# =============================================================================
+#  Пример: боевой кластер. Каждый блок — на своём пуле узлов, строго по
+#  одной копии на узел, TLS, резервные копии базы в S3.
+#     helm install wiki ./kubernetes/helm/wikispace -n wiki --create-namespace \
+#       -f kubernetes/examples/values-production.yaml
+#  Пулы узлов (метка workload) создайте в облаке заранее и включите для них
+#  автомасштабирование узлов (Cluster Autoscaler / Karpenter), например:
+#    web — 2…10 узлов по 2 vCPU / 4 ГБ;  db — 3 узла по 2–4 vCPU / 8 ГБ.
+# =============================================================================
+image:
+  repository: registry.example.com/wikispace
+  tag: "1.0.0"
+
+ingress:
+  className: nginx
+  host: wiki.example.com
+  tls:
+    enabled: true
+    secretName: wiki-example-com-tls
+    clusterIssuer: letsencrypt-prod
+
+app:
+  adminEmail: admin@example.com
+  seedDemo: false
+  extraEnv:
+    SETTING_SITE_NAME: "База знаний компании"
+
+web:
+  resources:
+    requests:
+      cpu: "1"          # по ядру на копию: Node.js обрабатывает запросы в одном потоке
+      memory: 384Mi
+    limits:
+      cpu: "2"
+      memory: 1Gi
+  nodeHeapMb: 768
+  autoscaling:
+    minReplicas: 3        # по копии в каждой из трёх зон доступности
+    maxReplicas: 30
+    targetCPUUtilizationPercentage: 65   # ~0,65 ядра ≈ 95 запросов/с на копию
+  podDisruptionBudget:
+    minAvailable: 2
+  topologySpread:
+    # Строго по одной копии на узел: лишние копии ждут новых узлов от
+    # автоскейлера кластера, а не набиваются на уже загруженные.
+    nodeWhenUnsatisfiable: DoNotSchedule
+    zoneWhenUnsatisfiable: ScheduleAnyway
+  nodeSelector:
+    workload: web
+  tolerations:
+    - { key: workload, operator: Equal, value: web, effect: NoSchedule }
+
+persistence:
+  accessMode: ReadWriteMany
+  storageClass: nfs-client     # ваш класс хранения с ReadWriteMany
+  size: 200Gi
+
+postgresql:
+  mode: cnpg
+  cnpg:
+    instances: 3
+    podAntiAffinityType: required   # экземпляры строго на разных узлах
+    storage:
+      size: 100Gi
+      storageClass: fast-ssd
+    resources:
+      requests: { cpu: "1", memory: 4Gi }
+      limits: { memory: 6Gi }
+    parameters:
+      max_connections: "400"
+      shared_buffers: 1GB            # ~25% памяти экземпляра
+      effective_cache_size: 3GB
+      work_mem: 16MB
+      maintenance_work_mem: 256MB
+    nodeSelector:
+      workload: db
+    tolerations:
+      - { key: workload, operator: Equal, value: db, effect: NoSchedule }
+    enablePodMonitor: true
+    backup:
+      enabled: true
+      destinationPath: s3://company-wiki-backups/
+      endpointURL: https://storage.yandexcloud.net
+      s3CredentialsSecret: wiki-backup-s3
+  pooler:
+    instances: 3
+    defaultPoolSize: "80"
+    nodeSelector:
+      workload: db
+    tolerations:
+      - { key: workload, operator: Equal, value: db, effect: NoSchedule }
+
+serviceMonitor:
+  enabled: true

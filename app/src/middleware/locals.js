@@ -8,6 +8,7 @@
  *  редирект (хранятся в сессии до первого показа).
  * ============================================================================
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from '../config.js';
@@ -21,11 +22,29 @@ import { icon } from '../utils/icons.js';
 import { videoTypeFor } from '../utils/media.js';
 
 /* ----------------------------------------------------------------------------
- * Версия статических файлов = время запуска процесса. Добавляется к ссылкам
- * (/css/app.css?v=...), поэтому после обновления контейнера браузеры
- * гарантированно загрузят свежие стили и скрипты, а не старые из кэша.
+ * Версия статических файлов — хеш их содержимого (стили, скрипты, темы и
+ * custom.css/js). Добавляется к ссылкам (/css/app.css?v=...), поэтому после
+ * обновления браузеры гарантированно загрузят свежие файлы, а не старые из
+ * кэша. Хеш, а не время запуска: у всех копий приложения из одного образа
+ * (Kubernetes) версия одинаковая, и браузер не перекачивает файлы, попадая
+ * то на одну копию, то на другую.
  * ------------------------------------------------------------------------- */
-const ASSET_VERSION = Date.now().toString(36);
+function assetVersion() {
+  const hash = crypto.createHash('sha1');
+  const walk = (dir) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.(css|js)$/.test(entry.name)) hash.update(entry.name).update(fs.readFileSync(full));
+    }
+  };
+  walk(config.publicDir);
+  walk(path.join(config.customDir, 'public'));
+  return hash.digest('hex').slice(0, 10);
+}
+const ASSET_VERSION = assetVersion();
 
 /* ----------------------------------------------------------------------------
  * Пользовательские файлы из custom/public: если администратор положил туда

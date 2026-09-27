@@ -1,0 +1,43 @@
+{{/* Вход снаружи. Аннотации ingress-nginx:
+     - proxy-body-size: видео до VIDEO_MAX_MB (с запасом на multipart);
+     - proxy-request-buffering off: большая загрузка сразу идёт в
+       приложение (оно пишет файл на диск потоком), а не копится в nginx;
+     - таймауты: загрузка ролика по медленному каналу может идти долго.
+     Сессии хранятся в PostgreSQL, поэтому «липкие» сессии не нужны. */}}
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "wikispace.fullname" . }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+  annotations:
+    {{- if eq .Values.ingress.className "nginx" }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ printf "%dm" (add (max .Values.app.videoMaxMb .Values.app.uploadMaxMb) 10) | quote }}
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    {{- end }}
+    {{- with .Values.ingress.tls.clusterIssuer }}
+    cert-manager.io/cluster-issuer: {{ . }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}{{ toYaml . | nindent 4 }}{{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "wikispace.web" . }}
+                port:
+                  name: http
+{{- end }}

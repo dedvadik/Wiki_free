@@ -1,0 +1,26 @@
+{{/* Сетевая политика: к PostgreSQL (mode: simple) подключаются только копии
+     web. (Кластер CloudNativePG управляет доступом к своим экземплярам сам;
+     оператору и пулерам нужны свои соединения, поэтому здесь его не трогаем.)
+     Работает, если сетевой плагин кластера поддерживает NetworkPolicy
+     (Calico, Cilium и большинство управляемых кластеров). */}}
+{{- if and .Values.networkPolicy.enabled (eq .Values.postgresql.mode "simple") }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "wikispace.db" . }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: database
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "wikispace.webSelector" . | nindent 14 }}
+      ports:
+        - port: 5432
+{{- end }}

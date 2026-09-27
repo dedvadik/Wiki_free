@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 WikiSpace: a self-hosted, Confluence-style knowledge base. It has spaces, a page tree, version history, full-text search, LDAP login, per-space permissions, themes and customization. The stack is Node.js 22 (ESM), Express 5, EJS server-side templates and PostgreSQL 17. There is no build step, no bundler, no linter and no unit-test framework.
 
-**Layout:** the repo root holds only the Docker files (`Dockerfile`, `docker-compose.yml`, `docker-bake.hcl`, `.dockerignore`, `.env.example`) plus `custom/` (admin overrides, bind-mounted into the container). All application code lives in `app/`. Paths below (`src/…`, `views/…`, `public/…`) are relative to `app/`. Inside the container the code sits directly in `/app` (`/app/src`, …), so `docker compose exec app node src/…` commands have no `app/` prefix.
+**Layout:** the repo root holds only the Docker files (`Dockerfile`, `docker-compose.yml`, `docker-bake.hcl`, `.dockerignore`, `.env.example`) plus `custom/` (admin overrides, bind-mounted into the container) and `kubernetes/` (Helm chart + examples). All application code lives in `app/`. Paths below (`src/…`, `views/…`, `public/…`) are relative to `app/`. Inside the container the code sits directly in `/app` (`/app/src`, …), so `docker compose exec app node src/…` commands have no `app/` prefix.
 
 UI text, code comments and docs are in **Russian**. The house style is a detailed Russian comment above every non-trivial block (the original requirement for the project). Match it when adding code.
 
@@ -126,6 +126,17 @@ Two editor types over one textarea: **Markdown** (textarea with live preview) an
 - **LDAP** (`services/ldap.js`, ldapts): search-and-bind with roles mapped from groups. `tlsOptions` must be passed only for `ldaps://` URLs.
 - **Uploads** (`routes/uploads.js`, multer): stored on disk as UUID-named files. Only raster images and videos (list in `src/utils/media.js`, shared by uploads, markdown and the editor) are served inline; everything else is an attachment. Videos have their own size limit (`VIDEO_MAX_MB`) and are embedded with image syntax `![title](/uploads/x.mp4)`, which `renderMarkdown` turns into `<video controls>`. Every file gets `CSP: sandbox` and `nosniff`.
 - **Themes**: `public/themes/<id>/theme.json` + `theme.css`, with a registry in `services/themes.js`. Custom themes go in `custom/themes/`. Styling is built on CSS variables, with `data-mode` light/dark on `<html>`. `/theme.css` is generated from the admin color settings.
+
+### Running several instances (Kubernetes, `kubernetes/helm/wikispace`)
+
+The app is designed to run as N interchangeable replicas; keep it that way:
+- **No per-instance state.** Sessions live in PostgreSQL, files on a shared RWX volume, and `SESSION_SECRET` must be identical across replicas (the chart puts it in a Secret).
+- **In-memory caches must be safe to diverge briefly.** Site settings are re-read every `SETTINGS_SYNC_SECONDS` (`startSettingsSync`, polling, not LISTEN/NOTIFY, because PgBouncer runs in transaction mode). The `/theme.css` version and the static asset version are content hashes, identical across replicas. The page HTML cache is keyed by page version.
+- **One-time work goes under `withAdvisoryLock`** (`db/pool.js`): migrations, `bootstrapData`, docs import. In k8s it runs in the init container `node src/tools/prepare.js` against the primary directly (advisory locks don't work through PgBouncer). The main container uses `RUN_MIGRATIONS=false`.
+- **Probes:** `/livez` (no DB, liveness) and `/healthz` (DB + not draining, readiness). SIGTERM → `startDraining()` → wait `SHUTDOWN_DELAY_SECONDS` → `server.close`.
+- **Reads:** heavy read-only queries may use `readMany` (`DATABASE_READ_URL` → replicas; falls back to the primary pool). Never use it for data the user just wrote.
+- **Metrics:** `METRICS_PORT` starts a separate Prometheus server (`services/metrics.js`); the HPA/KEDA settings in `values.yaml` are tuned from the load-test numbers.
+- Validate chart changes with `helm lint` / `helm template` (e.g. via the `alpine/helm` image) for all files in `kubernetes/examples/`.
 
 ### Database
 

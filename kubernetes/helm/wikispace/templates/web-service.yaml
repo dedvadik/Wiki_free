@@ -1,0 +1,23 @@
+{{/* Сервис блока web: балансирует запросы между готовыми копиями
+     (только теми, у кого readinessProbe успешен). Порт metrics — для
+     Prometheus/KEDA внутри кластера; наружу через Ingress не публикуется. */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "wikispace.web" . }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "wikispace.webSelector" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+    {{- if .Values.web.metrics.enabled }}
+    - name: metrics
+      port: {{ .Values.web.metrics.port }}
+      targetPort: metrics
+    {{- end }}

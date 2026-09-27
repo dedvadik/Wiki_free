@@ -30,6 +30,8 @@ import { loadUser, siteAccess } from './middleware/auth.js';
 import { csrfProtection } from './middleware/csrf.js';
 import { errorHandler, notFound } from './middleware/errors.js';
 import { flash, locals } from './middleware/locals.js';
+import { metricsMiddleware } from './services/metrics.js';
+import { isDraining } from './services/lifecycle.js';
 import { adminRouter } from './routes/admin.js';
 import { apiRouter, publicApiRouter } from './routes/api.js';
 import { authRouter } from './routes/auth.js';
@@ -93,6 +95,23 @@ export function createApp({ sessionSecret }) {
   });
 
   /* --------------------------------------------------------------------------
+   * 0. Метрики Prometheus (только если задан METRICS_PORT): счётчик
+   *    подключается первым, чтобы учитывать все запросы, включая статику.
+   *    Сами метрики отдаются на отдельном порту (services/metrics.js).
+   * ---------------------------------------------------------------------- */
+  if (config.metricsPort) app.use(metricsMiddleware);
+
+  /* Копия останавливается (services/lifecycle.js): отвечаем с
+   * «Connection: close», чтобы балансировщик (nginx, traefik) не отправил
+   * следующий запрос по этому же keep-alive соединению — после закрытия
+   * сервера он получил бы обрыв и показал пользователю 502. Новые
+   * соединения балансировщик уже открывает к другим копиям. */
+  app.use((req, res, next) => {
+    if (isDraining()) res.set('Connection', 'close');
+    next();
+  });
+
+  /* --------------------------------------------------------------------------
    * 1. helmet — набор защитных заголовков. Главный — Content-Security-Policy:
    *    браузер выполнит JavaScript ТОЛЬКО из файлов нашего сайта ('self'),
    *    поэтому даже если в статью как-то попадёт <script>, он не запустится.
@@ -135,10 +154,11 @@ export function createApp({ sessionSecret }) {
   /* --------------------------------------------------------------------------
    * 3. Простое логирование запросов: «GET /pages/5 200 12ms».
    *    Событие 'finish' срабатывает, когда ответ полностью отправлен.
-   *    /healthz не логируем — Docker дёргает его каждые 30 секунд.
+   *    /healthz и /livez не логируем — Docker и Kubernetes проверяют их
+   *    каждые несколько секунд.
    * ---------------------------------------------------------------------- */
   app.use((req, res, next) => {
-    if (req.path === '/healthz') return next();
+    if (req.path === '/healthz' || req.path === '/livez') return next();
     const started = process.hrtime.bigint();
     res.on('finish', () => {
       const ms = Number(process.hrtime.bigint() - started) / 1e6;

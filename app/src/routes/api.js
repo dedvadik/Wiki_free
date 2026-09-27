@@ -18,6 +18,7 @@ import { renderMarkdown } from '../services/markdown.js';
 import { MAX_CONTENT_LENGTH } from '../services/pages.js';
 import { getSettings, getSettingsVersion } from '../services/settings.js';
 import { buildThemeCss } from '../services/theme.js';
+import { isDraining } from '../services/lifecycle.js';
 
 /* ---------------------------------------------------------------------------
  * publicApiRouter подключается ДО проверки доступа (siteAccess): стили и
@@ -25,14 +26,24 @@ import { buildThemeCss } from '../services/theme.js';
  * ------------------------------------------------------------------------- */
 export const publicApiRouter = Router();
 
+/* /healthz — «готов ли принимать запросы» (readiness): отвечает база и
+ * копия не останавливается. 503 — балансировщик временно не присылает
+ * сюда пользователей. Используется Docker HEALTHCHECK и readinessProbe. */
 publicApiRouter.get('/healthz', async (req, res) => {
+  if (isDraining()) return res.status(503).json({ status: 'draining' });
   try {
     await pool.query('SELECT 1');
-    res.json({ status: 'ok' });
+    return res.json({ status: 'ok' });
   } catch (err) {
-    res.status(503).json({ status: 'error', error: err.message });
+    return res.status(503).json({ status: 'error', error: err.message });
   }
 });
+
+/* /livez — «жив ли процесс» (livenessProbe) — БЕЗ обращения к базе.
+ * Если бы liveness проверял PostgreSQL, то при сбое базы Kubernetes
+ * перезапускал бы ВСЕ копии приложения разом, хотя они ни при чём и
+ * сами переподключатся, когда база вернётся. */
+publicApiRouter.get('/livez', (req, res) => res.json({ status: 'ok' }));
 
 /* ----------------------------------------------------------------------------
  * Ссылка в шаблоне выглядит как /theme.css?v=<версия настроек>.

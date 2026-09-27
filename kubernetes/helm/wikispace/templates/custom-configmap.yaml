@@ -1,0 +1,13 @@
+{{/* Кастомизация (аналог папки custom/): каждый файл из values custom.files
+     монтируется в /app/custom/<путь>. В ключах ConfigMap нельзя «/», поэтому
+     путь кодируется через «__» и раскладывается обратно в items тома. */}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "wikispace.fullname" . }}-custom
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+data:
+  {{- range $path, $content := .Values.custom.files }}
+  {{ $path | replace "/" "__" | quote }}: {{ $content | quote }}
+  {{- end }}

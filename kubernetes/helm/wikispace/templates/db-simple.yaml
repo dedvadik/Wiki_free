@@ -1,0 +1,89 @@
+{{/* ===========================================================================
+  БЛОК «database» (mode: simple) — один экземпляр PostgreSQL (StatefulSet).
+  Без реплик и автоматического переключения: при падении узла база
+  недоступна, пока pod не переедет. ТОЛЬКО для тестов и разработки; для
+  работы — mode: cnpg или внешняя управляемая база.
+=========================================================================== */}}
+{{- if eq .Values.postgresql.mode "simple" }}
+{{- $db := include "wikispace.db" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $db }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: database
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $db }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  serviceName: {{ $db }}
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: database
+    spec:
+      securityContext:
+        fsGroup: 70   # пользователь postgres в образе alpine
+      containers:
+        - name: postgres
+          image: {{ .Values.postgresql.simple.image }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.database | quote }}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: {{ $db }}-auth, key: username }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: {{ $db }}-auth, key: password }
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 15
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.postgresql.simple.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- with .Values.postgresql.simple.storage.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.postgresql.simple.storage.size }}
+{{- end }}

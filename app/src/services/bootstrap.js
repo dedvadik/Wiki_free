@@ -14,7 +14,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { config } from '../config.js';
-import { one, transaction } from '../db/pool.js';
+import { one, transaction, withAdvisoryLock } from '../db/pool.js';
 import { createUser, validatePassword } from './users.js';
 
 const SEED_DIR = path.join(import.meta.dirname, '..', 'seed');
@@ -96,4 +96,21 @@ export async function seedDemoContent() {
   });
 
   console.log('[bootstrap] Создано демо-пространство DOCS');
+}
+
+/* ----------------------------------------------------------------------------
+ * bootstrapData — обе операции выше под advisory-блокировкой PostgreSQL.
+ * Если одновременно стартуют несколько копий приложения (Kubernetes,
+ * docker compose --scale), они выполняют первичную настройку по очереди:
+ * первая создаёт администратора и демо-пространство, остальные видят, что
+ * всё уже есть, и ничего не делают. Без блокировки две копии могли бы
+ * одновременно увидеть пустую базу и столкнуться на уникальных ключах.
+ * ------------------------------------------------------------------------- */
+const BOOTSTRAP_LOCK_ID = 7300452;
+
+export async function bootstrapData() {
+  await withAdvisoryLock(BOOTSTRAP_LOCK_ID, async () => {
+    await ensureInitialAdmin();
+    await seedDemoContent();
+  });
 }

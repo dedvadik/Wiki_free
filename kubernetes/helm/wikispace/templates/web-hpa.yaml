@@ -1,0 +1,44 @@
+{{/* ===========================================================================
+  Автомасштабирование блока web (HorizontalPodAutoscaler v2).
+  Нагрузка растёт → средняя загрузка CPU копий выше порога → HPA добавляет
+  копии (быстро: до ×2 за 15 с); не хватает места на узлах → копии ждут в
+  Pending → автоскейлер кластера (Cluster Autoscaler / Karpenter) добавляет
+  узлы. Нагрузка падает → через 5 минут стабильно низкой загрузки HPA
+  плавно убирает копии (≤1 в минуту) → опустевшие узлы автоскейлер
+  кластера удаляет, и мощность высвобождается.
+  Нужен metrics-server (в большинстве управляемых кластеров уже есть).
+  При keda.enabled вместо этого HPA работает KEDA (web-keda.yaml).
+=========================================================================== */}}
+{{- if and .Values.web.autoscaling.enabled (not .Values.keda.enabled) }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "wikispace.web" . }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "wikispace.web" . }}
+  minReplicas: {{ .Values.web.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.web.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.web.autoscaling.targetCPUUtilizationPercentage }}
+    {{- if .Values.web.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.web.autoscaling.targetMemoryUtilizationPercentage }}
+    {{- end }}
+  behavior:
+    {{- toYaml .Values.web.autoscaling.behavior | nindent 4 }}
+{{- end }}

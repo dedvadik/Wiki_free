@@ -1,0 +1,29 @@
+WikiSpace установлен: релиз «{{ .Release.Name }}», пространство имён «{{ .Release.Namespace }}».
+
+{{- if .Values.ingress.enabled }}
+Адрес: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}
+{{- else }}
+Ingress выключен. Открыть локально:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "wikispace.web" . }} 8080:80
+{{- end }}
+
+Вход: {{ .Values.app.adminUsername }}, пароль:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "wikispace.secret" . }} -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d; echo
+
+Состояние блоков:
+  kubectl -n {{ .Release.Namespace }} get pods -o wide        # копии и узлы, на которых они работают
+  kubectl -n {{ .Release.Namespace }} get hpa                  # автомасштабирование web
+{{- if eq .Values.postgresql.mode "cnpg" }}
+  kubectl -n {{ .Release.Namespace }} get cluster,pooler       # PostgreSQL и PgBouncer
+{{- end }}
+{{- if eq .Values.postgresql.mode "simple" }}
+
+ВНИМАНИЕ: postgresql.mode=simple — один экземпляр PostgreSQL без реплик.
+Годится только для тестов; для работы используйте mode=cnpg или внешнюю базу.
+{{- end }}
+{{- if and .Values.persistence.enabled (ne .Values.persistence.accessMode "ReadWriteMany") (or .Values.web.autoscaling.enabled (gt (int .Values.web.replicas) 1)) }}
+
+ВНИМАНИЕ: том загрузок {{ .Values.persistence.accessMode }}, а копий web несколько.
+Это работает, только если все копии на одном узле. Для кластера из нескольких
+узлов нужен класс хранения с ReadWriteMany (NFS, CephFS, Longhorn, EFS…).
+{{- end }}

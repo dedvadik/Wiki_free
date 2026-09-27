@@ -12,7 +12,7 @@
  * ============================================================================
  */
 import { Router } from 'express';
-import { many, one } from '../db/pool.js';
+import { many, one, readMany } from '../db/pool.js';
 import { requireRole } from '../middleware/auth.js';
 import { escapeHtml, excerpt, renderMarkdown } from '../services/markdown.js';
 import { accessParams, editableSpacesSql, readableSpacesSql } from '../services/permissions.js';
@@ -108,7 +108,9 @@ homeRouter.get('/search', async (req, res) => {
    * Маркеры ⟦ ⟧ вместо HTML-тегов: сначала экранируем фрагмент целиком,
    * а потом безопасно заменяем маркеры на <mark>. */
   const readable = readableSpacesSql('s', '$4', '$5');
-  const rows = await many(
+  /* Поиск — самый тяжёлый запрос на чтение: идёт на реплики, если они
+   * настроены (DATABASE_READ_URL), иначе на основной сервер. */
+  const rows = await readMany(
     `WITH q AS (SELECT websearch_to_tsquery('russian', $1) AS query),
      matches AS MATERIALIZED (
        SELECT p.id, p.updated_at
@@ -154,7 +156,7 @@ homeRouter.get('/search', async (req, res) => {
 
 /* Метки и счётчики учитывают только страницы доступных пространств. */
 homeRouter.get('/labels', async (req, res) => {
-  const labels = await many(
+  const labels = await readMany( /* подсчёт по всем страницам — на реплики */
     `SELECT l.name, count(pl.page_id)::int AS page_count
        FROM labels l
        JOIN page_labels pl ON pl.label_id = l.id
@@ -170,7 +172,7 @@ homeRouter.get('/labels', async (req, res) => {
 
 homeRouter.get('/labels/:name', async (req, res) => {
   const name = String(req.params.name).toLowerCase();
-  const pages = await many(
+  const pages = await readMany(
     `SELECT p.id, p.title, p.content, p.updated_at,
             s.key AS space_key, s.name AS space_name, s.icon AS space_icon
        FROM labels l

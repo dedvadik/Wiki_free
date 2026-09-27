@@ -23,6 +23,7 @@
  *  остальные копии (или добавьте периодическую перезагрузку кэша).
  * ============================================================================
  */
+import crypto from 'node:crypto';
 import { many, transaction } from '../db/pool.js';
 import { hasTheme } from './themes.js';
 
@@ -181,12 +182,15 @@ export const SETTINGS_SCHEMA = [
 const SCHEMA_BY_KEY = new Map(SETTINGS_SCHEMA.map((def) => [def.key, def]));
 
 /* ----------------------------------------------------------------------------
- * Кэш значений и «версия» настроек. Версия меняется при каждом сохранении
- * и добавляется к ссылке /theme.css?v=..., чтобы браузер сразу загрузил
- * новые стили, а не взял старые из своего кэша.
+ * Кэш значений и «версия» настроек. Версия добавляется к ссылке
+ * /theme.css?v=..., чтобы после сохранения браузер сразу загрузил новые
+ * стили, а не взял старые из своего кэша. Это хеш содержимого таблицы
+ * settings, а не время загрузки: у всех копий приложения (Kubernetes)
+ * версия одинаковая, и кэш браузера работает, на какую бы копию ни
+ * попал запрос.
  * ------------------------------------------------------------------------- */
 const cache = new Map();
-let version = Date.now();
+let version = '0';
 
 /* ----------------------------------------------------------------------------
  * normalizeValue — приведение «сырого» значения (из формы, env или БД)
@@ -281,7 +285,9 @@ function defaultFor(def) {
  * игнорируются; испорченный JSON — тоже, с предупреждением в логе.
  * ------------------------------------------------------------------------- */
 export async function loadSettings() {
-  const rows = await many('SELECT key, value FROM settings');
+  const rows = await many('SELECT key, value FROM settings ORDER BY key');
+  /* Кэш очищается и заполняется без await между шагами — запросы никогда
+   * не увидят «половину» настроек. */
   cache.clear();
   for (const { key, value } of rows) {
     if (!SCHEMA_BY_KEY.has(key)) continue;
@@ -291,7 +297,31 @@ export async function loadSettings() {
       console.warn(`[settings] Не удалось прочитать значение настройки ${key}`);
     }
   }
-  version = Date.now();
+  const previous = version;
+  version = crypto.createHash('sha1').update(rows.map((r) => `${r.key}=${r.value}`).join('\n')).digest('hex').slice(0, 12);
+  return version !== previous;
+}
+
+/* ----------------------------------------------------------------------------
+ * startSettingsSync — для нескольких копий приложения. Настройки хранятся
+ * в памяти каждой копии; когда администратор сохраняет их, обновляется
+ * только та копия, которая обработала запрос. Остальные раз в seconds
+ * секунд перечитывают таблицу settings (один маленький запрос) и через
+ * несколько секунд тоже видят изменения. seconds = 0 — не проверять.
+ * Работает через любой пулер соединений (в отличие от LISTEN/NOTIFY,
+ * который ломается за PgBouncer в режиме транзакций).
+ * ------------------------------------------------------------------------- */
+export function startSettingsSync(seconds) {
+  if (!seconds) return null;
+  const timer = setInterval(async () => {
+    try {
+      if (await loadSettings()) console.log('[settings] Настройки изменены на другой копии приложения — загружены');
+    } catch (err) {
+      console.warn('[settings] Не удалось проверить настройки:', err.message);
+    }
+  }, seconds * 1000);
+  timer.unref(); /* не мешает процессу завершиться */
+  return timer;
 }
 
 /** Текущее значение одной настройки: из БД или значение по умолчанию. */
@@ -368,8 +398,9 @@ export async function updateSettings(input, keys = SETTINGS_SCHEMA.map((d) => d.
     }
   });
 
-  for (const [key, value] of values) cache.set(key, value);
-  version = Date.now();
+  /* Перечитываем из базы: так версия (хеш содержимого) совпадёт с той, что
+   * вычислят остальные копии приложения. */
+  await loadSettings();
   return { errors: [] };
 }
 
@@ -382,8 +413,7 @@ export async function resetSettings(group) {
   const keys = SETTINGS_SCHEMA.filter((d) => d.group === group).map((d) => d.key);
   if (!keys.length) return;
   await transaction((db) => db.query('DELETE FROM settings WHERE key = ANY($1)', [keys]));
-  keys.forEach((k) => cache.delete(k));
-  version = Date.now();
+  await loadSettings();
 }
 
 /** Вкладка настройки: у большинства полей не указана — значит 'general'. */

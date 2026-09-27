@@ -1,0 +1,39 @@
+{{/* ===========================================================================
+  Масштабирование через KEDA (keda.enabled) — вместо обычного HPA.
+  Два сигнала, берётся больший:
+   - запросы в работе (метрика приложения wikispace_http_requests_in_flight
+     из Prometheus): на каждые inFlightPerReplica одновременных запросов —
+     одна копия. Реагирует на всплеск раньше, чем вырастет загрузка CPU;
+   - загрузка CPU, как у HPA.
+  Правила скорости роста/снижения — те же, что web.autoscaling.behavior.
+=========================================================================== */}}
+{{- if .Values.keda.enabled }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "wikispace.web" . }}
+  labels:
+    {{- include "wikispace.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ include "wikispace.web" . }}
+  minReplicaCount: {{ .Values.web.autoscaling.minReplicas }}
+  maxReplicaCount: {{ .Values.web.autoscaling.maxReplicas }}
+  pollingInterval: {{ .Values.keda.pollingInterval }}
+  cooldownPeriod: {{ .Values.keda.cooldownPeriod }}
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        {{- toYaml .Values.web.autoscaling.behavior | nindent 8 }}
+  triggers:
+    - type: prometheus
+      metricType: AverageValue
+      metadata:
+        serverAddress: {{ .Values.keda.prometheusServer | quote }}
+        query: sum(wikispace_http_requests_in_flight{namespace="{{ .Release.Namespace }}",service="{{ include "wikispace.web" . }}"})
+        threshold: {{ .Values.keda.inFlightPerReplica | quote }}
+    - type: cpu
+      metricType: Utilization
+      metadata:
+        value: {{ .Values.keda.cpuUtilization | quote }}
+{{- end }}
