@@ -12,6 +12,9 @@
  *       :::info Заголовок ... :::   — цветные информационные панели
  *       [[toc]]                     — автоматическое оглавление
  *       {{status:green:ГОТОВО}}     — цветной «статус-лозунг»
+ *       ![название](ролик.mp4)      — видеоплеер: «картинка», которая ссылается
+ *                                     на видеофайл (список форматов —
+ *                                     src/utils/media.js)
  *     а также подсветкой синтаксиса кода (highlight.js) и якорями у заголовков.
  *  2. sanitize-html — вычищает всё опасное (теги <script>, обработчики onclick,
  *     ссылки javascript:). Это защита от XSS: пользователь может вставить в
@@ -22,6 +25,7 @@ import { Marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
 import sanitizeHtml from 'sanitize-html';
+import { videoTypeFor } from '../utils/media.js';
 
 /* ----------------------------------------------------------------------------
  * Утилиты для работы со строками
@@ -181,6 +185,19 @@ const marked = new Marked(
         }
         return `<h${depth} id="${escapeHtml(id)}">${inner}<a class="heading-anchor" href="#${escapeHtml(id)}" aria-hidden="true">#</a></h${depth}>\n`;
       },
+      /* Видео: ![название](файл.mp4) — тот же синтаксис, что у картинки, но
+       * вместо <img> выводится встроенный плеер. preload="metadata" — браузер
+       * скачивает только начало файла (длительность и первый кадр), а сам
+       * ролик — когда его запустят. Внутри <video> — ссылка на скачивание
+       * для браузеров, которые не умеют такой формат.
+       * Остальные картинки (return false) рисует стандартный рендерер. */
+      image({ href, title, text }) {
+        if (!videoTypeFor(href)) return false;
+        const label = title || text || '';
+        return `<video class="video" src="${escapeHtml(href)}" controls preload="metadata" playsinline`
+          + `${label ? ` title="${escapeHtml(label)}"` : ''}>`
+          + `<a href="${escapeHtml(href)}">Скачать видео${text ? ` «${escapeHtml(text)}»` : ''}</a></video>`;
+      },
     },
   },
 );
@@ -197,12 +214,13 @@ const marked = new Marked(
 const SANITIZE_OPTIONS = {
   allowedTags: [
     ...sanitizeHtml.defaults.allowedTags,
-    'img', 'del', 'ins', 'input', 'details', 'summary', 'sup', 'sub', 'mark', 'kbd', 'h1', 'h2',
+    'img', 'video', 'del', 'ins', 'input', 'details', 'summary', 'sup', 'sub', 'mark', 'kbd', 'h1', 'h2',
   ],
   allowedAttributes: {
     '*': ['id', 'class', 'title', 'aria-hidden'],
     a: ['href', 'name', 'target', 'rel'],
     img: ['src', 'alt', 'width', 'height', 'loading'],
+    video: ['src', 'controls', 'preload', 'playsinline'],
     input: ['type', 'checked', 'disabled'],
     th: ['align', 'colspan', 'rowspan'],
     td: ['align', 'colspan', 'rowspan'],
@@ -210,7 +228,7 @@ const SANITIZE_OPTIONS = {
     details: ['open'],
   },
   allowedSchemes: ['http', 'https', 'mailto', 'tel'],
-  allowedSchemesByTag: { img: ['http', 'https', 'data'] },
+  allowedSchemesByTag: { img: ['http', 'https', 'data'], video: ['http', 'https'] },
   allowProtocolRelative: false,
   /* <input> оставляем только как чекбокс (списки задач). */
   exclusiveFilter: (frame) => frame.tag === 'input' && frame.attribs.type !== 'checkbox',
@@ -219,6 +237,9 @@ const SANITIZE_OPTIONS = {
       ? { tagName, attribs: { ...attribs, target: '_blank', rel: 'noopener noreferrer' } }
       : { tagName, attribs }),
     img: (tagName, attribs) => ({ tagName, attribs: { ...attribs, loading: 'lazy' } }),
+    /* Видео из сырого HTML статьи — всегда с кнопками управления и без
+     * загрузки всего файла заранее (autoplay и прочее отбрасывается выше). */
+    video: (tagName, attribs) => ({ tagName, attribs: { ...attribs, controls: '', preload: 'metadata' } }),
     input: (tagName, attribs) => ({ tagName, attribs: { ...attribs, disabled: '' } }),
   },
 };

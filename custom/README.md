@@ -4,7 +4,7 @@
 
 ```text
 custom/
-├── views/          ← шаблоны EJS: файл с тем же путём заменяет встроенный из views/
+├── views/          ← шаблоны EJS: файл с тем же путём заменяет встроенный из app/views/
 │   └── partials/
 │       └── footer.ejs
 ├── public/         ← статика, доступна по адресу /<путь>
@@ -12,13 +12,13 @@ custom/
 │   ├── custom.js   ← если файл есть, подключается на всех страницах
 │   ├── img/logo.svg← перекрывает стандартный логотип
 │   └── themes/     ← свои темы оформления: themes/<id>/theme.json + theme.css
-│                     (см. public/themes/README.md в корне проекта)
+│                     (см. app/public/themes/README.md)
 └── examples/       ← готовые примеры (сами по себе НЕ подключаются)
 ```
 
 ## Как заменить шаблон
 
-1. Найдите нужный файл в папке `views/` проекта, например `views/partials/footer.ejs`.
+1. Найдите нужный файл в папке `app/views/` проекта, например `app/views/partials/footer.ejs`.
 2. Скопируйте его в `custom/views/partials/footer.ejs` и отредактируйте копию.
 3. Перезапустите приложение: `docker compose restart app`.
 

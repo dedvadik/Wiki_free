@@ -92,15 +92,21 @@ export const config = Object.freeze({
   trustProxy: parseTrustProxy(env.TRUST_PROXY),
 
   /* Пути. customDir — папка пользовательских переопределений шаблонов и
-   * статики (главный механизм «глубокой» кастомизации, см. README). */
+   * статики (главный механизм «глубокой» кастомизации, см. README). Она
+   * лежит в корне репозитория, рядом с файлами Docker, а не в app/: в Docker
+   * её монтирует docker-compose.yml (CUSTOM_DIR=/app/custom), а при запуске
+   * без Docker из папки app/ по умолчанию берётся ../custom. */
   dataDir: DATA_DIR,
   uploadsDir: path.join(DATA_DIR, 'uploads'),
-  customDir: path.resolve(env.CUSTOM_DIR || path.join(ROOT_DIR, 'custom')),
+  customDir: path.resolve(env.CUSTOM_DIR || path.join(ROOT_DIR, '..', 'custom')),
   viewsDir: path.join(ROOT_DIR, 'views'),
   publicDir: path.join(ROOT_DIR, 'public'),
 
-  /* Ограничение размера загружаемого файла (в мегабайтах). */
+  /* Ограничение размера загружаемого файла (в мегабайтах). Для видео — свой
+   * лимит: ролики обычно больше документов, а воспроизводятся они прямо на
+   * портале (см. src/utils/media.js). */
   uploadMaxMb: toInt(env.UPLOAD_MAX_MB, 20),
+  videoMaxMb: toInt(env.VIDEO_MAX_MB, 200),
 
   /* Первичный администратор: создаётся при первом запуске, если в базе ещё
    * нет ни одного пользователя и задан ADMIN_PASSWORD. Если не задан —

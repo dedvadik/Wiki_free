@@ -1,4 +1,4 @@
-Картинки и файлы, которые прикрепляют к статьям. Код — `src/routes/uploads.js`, в редакторе — `public/js/editor.js`.
+Картинки, видео и файлы, которые прикрепляют к статьям. Код — `src/routes/uploads.js`, в редакторе — `public/js/editor.js`.
 
 [[toc]]
 
@@ -6,13 +6,14 @@
 
 ```text
 редактор (кнопка 📎, Ctrl+V, перетаскивание)
-   │ fetch multipart/form-data + заголовок X-CSRF-Token
+   │ XMLHttpRequest multipart/form-data + заголовок X-CSRF-Token (процент загрузки — в строке состояния)
    ▼
 requireRole('editor') → multer (diskStorage) → запись в attachments
    ▼
-JSON { id, url, name, isImage, markdown }
+JSON { id, url, name, isImage, isVideo, markdown }
    ▼
 редактор заменяет заглушку «Загрузка…» готовой Markdown-ссылкой
+(в визуальном режиме — сразу картинка, видеоплеер или ссылка)
 ```
 
 Настройка `multer`:
@@ -21,10 +22,10 @@ JSON { id, url, name, isImage, markdown }
 | --- | --- | --- |
 | `destination` | `config.uploadsDir` (`/app/data/uploads`) | файлы лежат в volume `app-data` |
 | `filename` | `crypto.randomUUID()` + расширение (если оно из латиницы и цифр) | нельзя перезаписать чужой файл или выйти из папки через `../` |
-| `limits` | `UPLOAD_MAX_MB` (20 МБ), один файл | защита диска |
+| `limits` | больший из `UPLOAD_MAX_MB` (20 МБ) и `VIDEO_MAX_MB` (200 МБ), один файл | защита диска; «обычный» файл больше `UPLOAD_MAX_MB` удаляется сразу после приёма — multer не умеет разные лимиты для разных файлов |
 | `defParamCharset: 'utf8'` | — | кириллические имена файлов не превращаются в «кракозябры» |
 
-Ошибки `multer` (слишком большой файл) превращаются в понятный JSON с кодом 413/400.
+Ошибки `multer` (слишком большой файл) превращаются в понятный JSON с кодом 413/400. Редактор проверяет размер ещё до отправки (лимиты приходят в data-атрибутах формы), поэтому слишком большой ролик не грузится минутами впустую.
 
 **Привязка к странице.** Если файл загружают в редакторе существующей страницы, он сразу привязывается к ней (`page_id`). У новой страницы ещё нет id, поэтому редактор копит id загруженных файлов в скрытом поле `attachment_ids`, а при первом сохранении `linkAttachments` привязывает их. Привязываются только файлы текущего пользователя.
 
@@ -32,8 +33,8 @@ JSON { id, url, name, isImage, markdown }
 
 1. Имя проверяется регуляркой: UUID и необязательное расширение.
 2. Файл ищется в таблице `attachments`; если записи нет — 404.
-3. **Inline** (прямо в браузере) показываются только растровые картинки (`.png .jpg .jpeg .gif .webp .avif .bmp .ico` с MIME `image/*`). Всё остальное, включая SVG и HTML, отдаётся с `Content-Disposition: attachment` и типом `application/octet-stream`.
-4. Всегда добавляются `X-Content-Type-Options: nosniff` и `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox`.
+3. **Inline** (прямо в браузере) показываются только растровые картинки (`.png .jpg .jpeg .gif .webp .avif .bmp .ico` с MIME `image/*`) и видео (см. ниже). Всё остальное, включая SVG и HTML, отдаётся с `Content-Disposition: attachment` и типом `application/octet-stream`.
+4. Всегда добавляются `X-Content-Type-Options: nosniff` и `Content-Security-Policy: default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox`. `img-src` и `media-src` нужны, когда файл открыли в отдельной вкладке: браузер строит вокруг картинки или видео служебную страницу, и ей надо загрузить сам файл.
 5. `Cache-Control: private, max-age=86400`.
 
 :::warning Почему не отдавать HTML «как есть»
@@ -41,6 +42,23 @@ JSON { id, url, name, isImage, markdown }
 :::
 
 Маршрут подключён **после** `siteAccess`, поэтому в закрытой вики файлы тоже доступны только вошедшим.
+
+## Видео
+
+Видео загружаются так же, как картинки (📎, перетаскивание, вставка из буфера), и **воспроизводятся прямо в статье** встроенным плеером браузера.
+
+| | |
+| --- | --- |
+| Форматы | `.mp4` `.m4v` (H.264 — играет везде), `.webm`, `.mov` (с iPhone/Mac; H.264 играет везде, HEVC — не во всех браузерах), `.ogv` (Firefox). Список — `src/utils/media.js`, один на весь сайт |
+| Размер | до `VIDEO_MAX_MB` (по умолчанию 200 МБ); остальные файлы — до `UPLOAD_MAX_MB` |
+| В тексте статьи | `![название](/uploads/….mp4)` — синтаксис картинки; `services/markdown.js` видит расширение видео и выводит `<video controls preload="metadata">` |
+| Тип (MIME) | по расширению, а не по данным браузера: для `.mov` браузер часто присылает `application/octet-stream`, и плеер отказался бы играть |
+| Перемотка | `res.sendFile` отвечает на HTTP Range-запросы (`206 Partial Content`): плеер скачивает только нужный кусок |
+| Чужие ролики | не проигрываются: CSP сайта — `media-src 'self'` |
+
+`preload="metadata"` — пока ролик не запустили, браузер скачивает только его начало (длительность и первый кадр), поэтому статья с несколькими видео открывается быстро. Внутри `<video>` лежит ссылка «Скачать видео» для браузеров, не умеющих формат. AVI, MKV, WMV браузеры не воспроизводят — они остаются обычными вложениями.
+
+Загрузка идёт через `XMLHttpRequest` (у `fetch` нет прогресса отправки), процент виден в строке состояния редактора. Сервер ждёт запрос целиком до часа (`server.requestTimeout` в `server.js`; по умолчанию в Node.js — 5 минут). За обратным прокси поднимите и его лимит тела запроса (nginx: `client_max_body_size 200m;`).
 
 ## Удаление: POST /attachments/:id/delete
 

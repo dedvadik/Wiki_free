@@ -4,12 +4,15 @@
  *                          выдерживает одновременные загрузки
  * ============================================================================
  *  Сценарий matrix (1 пользователь, один проход) — проверка по типам и размерам:
- *   - 16 типов файлов (картинки, документы, архивы, видео, исполняемые,
- *     HTML/SVG/JS): каждый должен загрузиться; растровые картинки
- *     показываются в браузере (inline), всё остальное — только скачивание
- *     (Content-Disposition: attachment) и всегда с CSP sandbox + nosniff;
+ *   - 18 типов файлов (картинки, документы, архивы, видео, исполняемые,
+ *     HTML/SVG/JS): каждый должен загрузиться; растровые картинки и видео
+ *     (mp4, webm, mov) показываются в браузере (inline), всё остальное —
+ *     только скачивание (Content-Disposition: attachment); всегда CSP
+ *     sandbox + nosniff;
  *   - размеры 1, 10, 19,9 и ровно 20 МБ — принимаются; 20 МБ + 1 байт и
- *     50 МБ — отказ 413 (лимит UPLOAD_MAX_MB, по умолчанию 20).
+ *     50 МБ — отказ 413 (лимит UPLOAD_MAX_MB, по умолчанию 20);
+ *   - видео 50 МБ — принимается (свой лимит VIDEO_MAX_MB, по умолчанию 200),
+ *     видео VIDEO_MAX_MB + 1 байт — отказ 413.
  *  Сценарий concurrent — UPLOADERS редакторов непрерывно грузят файлы по
  *  UPLOAD_MB МБ, а параллельно READERS читателей открывают статьи:
  *  видно, мешают ли загрузки остальным.
@@ -26,6 +29,7 @@ const MB = 1024 * 1024;
 const UPLOADERS = Number(__ENV.UPLOADERS || 10);
 const UPLOAD_MB = Number(__ENV.UPLOAD_MB || 5);
 const MAX_MB = Number(__ENV.UPLOAD_MAX_MB || 20);
+const VIDEO_MAX_MB = Number(__ENV.VIDEO_MAX_MB || 200);
 
 export const options = {
   scenarios: {
@@ -82,21 +86,25 @@ export function matrix(data) {
   const pageId = data.ids[0][0];
 
   group('типы файлов', () => {
+    /* [имя, тип от браузера, как показывается: image | video | file] */
     const TYPES = [
-      ['photo.png', 'image/png', true], ['photo.jpg', 'image/jpeg', true], ['anim.gif', 'image/gif', true],
-      ['pic.webp', 'image/webp', true], ['icon.ico', 'image/x-icon', true], ['scheme.svg', 'image/svg+xml', false],
-      ['report.pdf', 'application/pdf', false], ['letter.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', false],
-      ['table.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', false], ['archive.zip', 'application/zip', false],
-      ['notes.txt', 'text/plain', false], ['data.csv', 'text/csv', false], ['video.mp4', 'video/mp4', false],
-      ['setup.exe', 'application/x-msdownload', false], ['page.html', 'text/html', false], ['script.js', 'text/javascript', false],
+      ['photo.png', 'image/png', 'image'], ['photo.jpg', 'image/jpeg', 'image'], ['anim.gif', 'image/gif', 'image'],
+      ['pic.webp', 'image/webp', 'image'], ['icon.ico', 'image/x-icon', 'image'], ['scheme.svg', 'image/svg+xml', 'file'],
+      ['report.pdf', 'application/pdf', 'file'], ['letter.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'file'],
+      ['table.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'file'], ['archive.zip', 'application/zip', 'file'],
+      ['notes.txt', 'text/plain', 'file'], ['data.csv', 'text/csv', 'file'],
+      ['video.mp4', 'video/mp4', 'video'], ['clip.webm', 'video/webm', 'video'], ['iphone.mov', 'application/octet-stream', 'video'],
+      ['setup.exe', 'application/x-msdownload', 'file'], ['page.html', 'text/html', 'file'], ['script.js', 'text/javascript', 'file'],
     ];
-    for (const [name, type, inline] of TYPES) {
+    for (const [name, type, kind] of TYPES) {
+      const inline = kind !== 'file';
       const body = name === 'photo.png' ? PNG_1PX : makeFile(50 * 1024, name.endsWith('.svg') ? '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script>' : '');
       const res = upload(csrf, pageId, body, name, type);
       const json = res.status === 200 ? res.json() : {};
       check(res, {
         [`${name}: загружен`]: (r) => r.status === 200 && Boolean(json.url),
-        [`${name}: ${inline ? 'картинка' : 'ссылка на файл'}`]: () => json.isImage === inline,
+        [`${name}: ${{ image: 'картинка', video: 'видеоплеер', file: 'ссылка на файл' }[kind]}`]: () => json.isImage === (kind === 'image')
+          && Boolean(json.isVideo) === (kind === 'video'),
       });
       if (!json.url) continue;
       const file = http.get(`${BASE}${json.url}`, { tags: { name: 'download' } });
@@ -104,6 +112,7 @@ export function matrix(data) {
       check(file, {
         [`${name}: скачивается`]: (r) => r.status === 200,
         [`${name}: ${inline ? 'inline' : 'attachment'}`]: () => (inline ? !disposition.includes('attachment') : disposition.includes('attachment')),
+        [`${name}: тип ответа`]: (r) => kind !== 'video' || String(r.headers['Content-Type']).startsWith('video/'),
         [`${name}: CSP sandbox + nosniff`]: (r) => String(r.headers['Content-Security-Policy']).includes('sandbox')
           && r.headers['X-Content-Type-Options'] === 'nosniff',
       });
@@ -118,6 +127,13 @@ export function matrix(data) {
     for (const [label, bytes, expected] of SIZES) {
       const started = Date.now();
       const res = upload(csrf, pageId, makeFile(bytes, '%PDF-1.7'), 'big.pdf', 'application/pdf');
+      console.log(`размер ${label}: HTTP ${res.status} за ${Date.now() - started} мс`);
+      check(res, { [`${label}: HTTP ${expected}`]: (r) => r.status === expected });
+    }
+    /* У видео свой, больший лимит. */
+    for (const [label, bytes, expected] of [['видео 50 МБ', 50 * MB, 200], [`видео ${VIDEO_MAX_MB} МБ + 1 байт`, VIDEO_MAX_MB * MB + 1, 413]]) {
+      const started = Date.now();
+      const res = upload(csrf, pageId, makeFile(bytes), 'big.mp4', 'video/mp4');
       console.log(`размер ${label}: HTTP ${res.status} за ${Date.now() - started} мс`);
       check(res, { [`${label}: HTTP ${expected}`]: (r) => r.status === expected });
     }

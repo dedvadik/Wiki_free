@@ -14,8 +14,15 @@
     <%# Приветствие: HTML уже очищен на сервере, поэтому выводится без экранирования. %>
     <div class="card welcome markdown-body"><%- welcomeHtml %></div>
 
-    <div class="card">
-      <h2 class="card-title">Недавние изменения</h2>
+    <%# Лента сворачивается целиком: клик по заголовку. Это нативный <details>,
+        он работает и без JavaScript (тогда лента всегда открыта при загрузке);
+        app.js (п. 10) запоминает выбор в этом браузере по ключу data-remember. %>
+    <details class="card collapsible" open data-remember="home-recent">
+      <summary class="collapsible-summary" title="Свернуть или развернуть список">
+        <h2 class="card-title">Недавние изменения</h2>
+        <% if (recent.length) { %><span class="collapsible-count"><%= recent.length %></span><% } %>
+        <span class="collapsible-chevron" aria-hidden="true"><%- icon('chevron-right') %></span>
+      </summary>
       <% if (!recent.length) { %>
         <p class="muted">Пока ничего нет.
           <% if (can('editor')) { %><a href="/spaces/new">Создайте первое пространство</a>.<% } %>
@@ -38,7 +45,7 @@
           <% }) %>
         </ul>
       <% } %>
-    </div>
+    </details>
   </section>
 
   <aside class="dashboard-side">

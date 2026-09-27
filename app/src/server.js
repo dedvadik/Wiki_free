@@ -69,6 +69,11 @@ async function main() {
   const server = app.listen(config.port, config.host, () => {
     console.log(`[server] Сайт доступен на http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
   });
+  /* Время на приём ВСЕГО запроса. По умолчанию в Node.js — 5 минут: видео
+   * на сотни мегабайт по медленному каналу (VPN, мобильный интернет) не
+   * успевало бы загрузиться. Час с запасом; от медленной отправки
+   * заголовков по-прежнему защищает headersTimeout (60 с). */
+  server.requestTimeout = 60 * 60 * 1000;
 
   /* --------------------------------------------------------------------------
    * 8. Корректное завершение (graceful shutdown).

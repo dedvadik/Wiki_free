@@ -15,7 +15,7 @@ docker compose up -d --build  # сборка и запуск
 | Этап | База | Что делает |
 | --- | --- | --- |
 | `deps` | `node:22-alpine` на **платформе сборщика** (`--platform=$BUILDPLATFORM`) | `npm ci --omit=dev` по `package-lock.json` с кэшем npm |
-| `runtime` | `node:22-alpine` **целевой платформы** | копирует `node_modules`, `src`, `views`, `public`, `docs`; создаёт `/app/data` и `/app/custom`; пользователь `node` |
+| `runtime` | `node:22-alpine` **целевой платформы** | копирует `node_modules` и из папки `app/` — `src`, `views`, `public`, `docs` (в образе они лежат прямо в `/app`); создаёт `/app/data` и `/app/custom`; пользователь `node` |
 
 :::tip Почему сборка под ARM быстрая
 В проекте нет нативных модулей, поэтому `node_modules` одинаковы для любой архитектуры. Этап `deps` выполняется на «родной» платформе сборщика без эмуляции QEMU, а готовые зависимости просто копируются в образ ARM.
@@ -23,11 +23,12 @@ docker compose up -d --build  # сборка и запуск
 
 Другие решения в `Dockerfile`:
 
-- **Кэш слоёв:** сначала копируются только `package*.json`, поэтому при правке кода медленный `npm ci` берётся из кэша.
+- **Контекст сборки** — корень репозитория, где лежат только файлы Docker; код берётся из `app/`.
+- **Кэш слоёв:** сначала копируются только `app/package*.json`, поэтому при правке кода медленный `npm ci` берётся из кэша.
 - **Безопасность:** приложение работает от непривилегированного пользователя `node`, а не от root.
 - **HEALTHCHECK:** каждые 30 с `wget http://127.0.0.1:3000/healthz`; неответ помечает контейнер как `unhealthy`.
 - **Запуск** `CMD ["node", "src/server.js"]` — напрямую, не через npm: так `SIGTERM` доходит до приложения и срабатывает корректная остановка.
-- `.dockerignore` не отправляет в сборку `node_modules`, `data`, `.env`, `custom` и Markdown-файлы, кроме `src/seed/*.md` и `docs/**/*.md`.
+- `.dockerignore` не отправляет в сборку `node_modules`, `app/data`, `.env`, `custom`, `app/tests` и Markdown-файлы, кроме `app/src/seed/*.md` и `app/docs/**/*.md`.
 
 ## docker-compose.yml
 

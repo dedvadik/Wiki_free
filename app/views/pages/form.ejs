@@ -21,6 +21,10 @@
   экспорт одинаково работают для страниц, написанных в любом режиме.
   Без JavaScript доступен только Markdown (textarea) — форма всё равно работает.
 
+  data-атрибуты формы для editor.js: лимиты загрузки (data-upload-max-mb,
+  data-video-max-mb) и расширения видео (data-video-ext) — видео вставляется
+  плеером, а слишком большой файл отклоняется ещё до отправки.
+
   Скрытые поля:
    - _csrf           — защита от CSRF;
    - base_version    — версия, с которой начато редактирование (для
@@ -37,7 +41,8 @@
 
 <form method="post"
       action="<%= isNew ? `/spaces/${space.key}/pages` : `/pages/${page.id}` %>"
-      class="editor-form" data-editor-form data-page-id="<%= isNew ? '' : page.id %>" data-editor-type="markdown">
+      class="editor-form" data-editor-form data-page-id="<%= isNew ? '' : page.id %>" data-editor-type="markdown"
+      data-upload-max-mb="<%= uploadLimits.fileMb %>" data-video-max-mb="<%= uploadLimits.videoMb %>" data-video-ext="<%= uploadLimits.videoExt %>">
   <input type="hidden" name="_csrf" value="<%= csrfToken() %>">
   <% if (!isNew) { %><input type="hidden" name="base_version" value="<%= baseVersion %>"><% } %>
   <input type="hidden" name="attachment_ids" value="" data-editor-attachments>
@@ -94,7 +99,7 @@
       <button type="button" data-md="row" title="Добавить строку в таблицу" class="visual-only">+▤</button>
       <button type="button" data-md="col" title="Добавить столбец в таблицу" class="visual-only">+▥</button>
       <button type="button" data-md="hr" title="Горизонтальная линия">―</button>
-      <button type="button" data-md="upload" title="Вставить файл или картинку">📎</button>
+      <button type="button" data-md="upload" title="Вставить файл, картинку или видео">📎</button>
     </div>
     <div class="tool-group">
       <%# Макросы в стиле Confluence %>

@@ -26,6 +26,7 @@
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Первый администратор |
 | `SESSION_SECRET` | Секрет подписи cookie |
 | `UPLOAD_MAX_MB` | Максимальный размер вложения |
+| `VIDEO_MAX_MB` | Максимальный размер видео |
 | `SETTING_<КЛЮЧ>` | Значение настройки по умолчанию, например `SETTING_SITE_NAME=Wiki` |
 
 ## 3. Папка `custom/` (полный контроль)

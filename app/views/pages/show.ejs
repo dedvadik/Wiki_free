@@ -116,7 +116,8 @@
           <tbody>
             <% attachments.forEach((a) => { %>
               <tr>
-                <td><a href="/uploads/<%= a.stored_name %>" target="_blank" rel="noopener">📎 <%= a.original_name %></a></td>
+                <%# 🎬 — видео: по ссылке оно откроется в плеере браузера, остальное скачивается. %>
+                <td><a href="/uploads/<%= a.stored_name %>" target="_blank" rel="noopener"><%= isVideoFile(a.stored_name) ? '🎬' : '📎' %> <%= a.original_name %></a></td>
                 <td class="muted small nowrap"><%= fileSize(a.size_bytes) %></td>
                 <td class="muted small"><%= authorName(a.uploaded_by_name) %>, <%= formatDate(a.created_at) %></td>
                 <% if (access.canEdit) { %>

@@ -48,6 +48,14 @@
   const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
   const pageId = form.dataset.pageId || '';
 
+  /* Лимиты загрузки и видеоформаты — из data-атрибутов формы (сервер берёт
+   * их из config.js и src/utils/media.js, поэтому список один на весь сайт). */
+  const MB = 1024 * 1024;
+  const uploadMaxMb = Number(form.dataset.uploadMaxMb) || 20;
+  const videoMaxMb = Number(form.dataset.videoMaxMb) || 200;
+  const videoExt = new Set((form.dataset.videoExt || '').split(',').filter(Boolean));
+  const isVideoName = (name) => videoExt.has(String(name).split(/[?#]/)[0].split('.').pop().toLowerCase());
+
   let dirty = false;         /* есть несохранённые изменения */
   let editorType = 'markdown';
   let visualDirty = false;   /* меняли ли текст в визуальном режиме */
@@ -281,7 +289,7 @@
     return node;
   }
 
-  const isEmptyElement = (el) => !el.textContent.trim() && !el.querySelector('img, table, input, hr');
+  const isEmptyElement = (el) => !el.textContent.trim() && !el.querySelector('img, video, table, input, hr');
 
   /** Подсказка «Начните писать…» (CSS-класс is-empty) — пока в редакторе нет содержимого. */
   const updateEmptyHint = () => visual.classList.toggle('is-empty', isEmptyElement(visual));
@@ -415,13 +423,25 @@
        turndown превратил бы их в строки из пробелов. */
     td.addRule('emptyParagraph', {
       filter: (n) => (n.nodeName === 'P' || n.nodeName === 'DIV') && !n.textContent.trim()
-        && !n.querySelector('img, input, table, hr, pre'),
+        && !n.querySelector('img, video, input, table, hr, pre'),
       replacement: () => '\n\n',
     });
 
     /* Значок «#» у заголовков (добавляет сервер) — не часть текста. */
     td.addRule('headingAnchor', { filter: (n) => n.nodeName === 'A' && hasClass(n, 'heading-anchor'), replacement: () => '' });
     td.addRule('strike', { filter: ['del', 's', 'strike'], replacement: (content) => `~~${content}~~` });
+
+    /* Видеоплеер → ![название](файл.mp4) — тот же синтаксис, что у картинки;
+       сервер снова превратит его в плеер (services/markdown.js). Ссылка
+       «Скачать видео» внутри <video> — запасной вариант, её не сохраняем. */
+    td.addRule('video', {
+      filter: 'video',
+      replacement: (content, n) => {
+        const src = n.getAttribute('src') || '';
+        const title = (n.getAttribute('title') || '').replace(/[[\]]/g, '');
+        return src ? `![${title}](${src})` : '';
+      },
+    });
     td.addRule('taskCheckbox', {
       filter: (n) => n.nodeName === 'INPUT' && n.type === 'checkbox',
       replacement: (content, n) => (n.checked ? '[x] ' : '[ ] '),
@@ -708,7 +728,10 @@
   /* =====================================================================
      7. ЗАГРУЗКА ФАЙЛОВ
      В Markdown-режиме на время загрузки вставляется заглушка, затем —
-     готовая Markdown-ссылка; в визуальном — сразу картинка или ссылка.
+     готовая Markdown-ссылка; в визуальном — сразу картинка, видеоплеер
+     или ссылка на файл. Размер проверяется ДО отправки (видео — свой
+     лимит), а в строке состояния виден процент загрузки — ролик на сотни
+     мегабайт грузится заметное время.
      id файла добавляется в скрытое поле attachment_ids: при сохранении
      новой страницы сервер привяжет к ней эти вложения.
      ===================================================================== */
@@ -716,11 +739,38 @@
     if (status) status.textContent = text;
   }
 
+  /** Отправка файла. XMLHttpRequest, а не fetch: только он сообщает о ходе
+   *  отправки (upload.onprogress). Ответ сервера — JSON (routes/uploads.js). */
+  function sendUpload(body, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/uploads');
+      xhr.setRequestHeader('X-CSRF-Token', csrfToken);
+      xhr.responseType = 'json';
+      xhr.upload.onprogress = (event) => { if (event.lengthComputable) onProgress(event.loaded / event.total); };
+      xhr.onload = () => {
+        const data = xhr.response || {};
+        if (xhr.status >= 200 && xhr.status < 300) resolve(data);
+        else reject(new Error(data.error || `HTTP ${xhr.status}`));
+      };
+      xhr.onerror = () => reject(new Error('соединение прервано'));
+      xhr.send(body);
+    });
+  }
+
   async function uploadFiles(files) {
     /* Визуальный режим: запоминаем, где стоял курсор, — пока файл
      * выбирается в диалоге и загружается, фокус уходит из редактора. */
     if (editorType === 'visual' && visual.contains(window.getSelection().anchorNode)) saveSelection();
     for (const file of files) {
+      const isVideo = isVideoName(file.name);
+      const limitMb = isVideo ? videoMaxMb : uploadMaxMb;
+      if (file.size > limitMb * MB) {
+        window.alert(`«${file.name}» слишком большой (${(file.size / MB).toFixed(1)} МБ): `
+          + `${isVideo ? 'видео' : 'файл'} можно загрузить до ${limitMb} МБ.`);
+        continue;
+      }
+
       const placeholder = `![Загрузка «${file.name}»…]()`;
       if (editorType === 'markdown') {
         textarea.setRangeText(placeholder, textarea.selectionStart, textarea.selectionEnd, 'end');
@@ -732,17 +782,19 @@
       if (pageId) body.append('page_id', pageId);
 
       try {
-        const response = await fetch('/api/uploads', { method: 'POST', headers: { 'X-CSRF-Token': csrfToken }, body });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        const data = await sendUpload(body, (share) => setStatus(`Загрузка ${file.name}: ${Math.round(share * 100)}%`));
 
         if (editorType === 'markdown') {
           textarea.value = textarea.value.replace(placeholder, data.markdown);
         } else {
           restoreSelection();
-          insertInline(data.isImage
-            ? `<img src="${escapeHtml(data.url)}" alt="${escapeHtml(data.name)}">`
-            : `<a href="${escapeHtml(data.url)}">📎 ${escapeHtml(data.name)}</a>&nbsp;`);
+          let html = `<a href="${escapeHtml(data.url)}">📎 ${escapeHtml(data.name)}</a>&nbsp;`;
+          if (data.isImage) html = `<img src="${escapeHtml(data.url)}" alt="${escapeHtml(data.name)}">`;
+          if (data.isVideo) {
+            html = `<video class="video" src="${escapeHtml(data.url)}" controls preload="metadata" playsinline `
+              + `title="${escapeHtml(data.name)}"></video>`;
+          }
+          insertInline(html);
         }
         attachmentsInput.value = [attachmentsInput.value, data.id].filter(Boolean).join(',');
         setStatus(`Загружено: ${data.name}`);

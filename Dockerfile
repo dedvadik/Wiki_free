@@ -7,6 +7,10 @@
 #    2) runtime — минимальный итоговый образ: Node.js + код + node_modules.
 #  Инструменты сборки и npm-кэш в итоговый образ не попадают.
 #
+#  РАСКЛАДКА: контекст сборки — корень репозитория (здесь лежат только файлы
+#  для Docker), код приложения — в папке app/. В образ он копируется в /app
+#  без этого уровня: /app/src, /app/views, … — как и раньше.
+#
 #  МУЛЬТИПЛАТФОРМЕННОСТЬ
 #  Базовый образ node:*-alpine опубликован для linux/amd64, linux/arm64,
 #  linux/arm/v7 и других архитектур. Docker сам берёт вариант под нужную
@@ -35,7 +39,7 @@ WORKDIR /app
 # Сначала копируем ТОЛЬКО манифесты зависимостей. Docker кэширует слои:
 # пока package*.json не меняются, этот медленный шаг берётся из кэша, даже
 # если вы правили исходный код.
-COPY package.json package-lock.json ./
+COPY app/package.json app/package-lock.json ./
 
 # npm ci — точная установка по package-lock.json (воспроизводимые сборки).
 # --omit=dev — без dev-зависимостей. Кэш npm монтируется только на время
@@ -68,12 +72,12 @@ WORKDIR /app
 # Копируем зависимости из первого этапа и исходный код.
 # --chown=node:node — файлы принадлежат непривилегированному пользователю.
 COPY --from=deps --chown=node:node /app/node_modules ./node_modules
-COPY --chown=node:node package.json ./
-COPY --chown=node:node src ./src
-COPY --chown=node:node views ./views
-COPY --chown=node:node public ./public
+COPY --chown=node:node app/package.json ./
+COPY --chown=node:node app/src ./src
+COPY --chown=node:node app/views ./views
+COPY --chown=node:node app/public ./public
 # Техническая документация для импорта на портал (npm run docs:import).
-COPY --chown=node:node docs ./docs
+COPY --chown=node:node app/docs ./docs
 
 # Папки для данных и кастомизации. Создаём заранее с владельцем node:
 # именованный Docker volume при первом подключении унаследует эти права.

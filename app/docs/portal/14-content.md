@@ -19,6 +19,7 @@
 | `:::info Заголовок` … `:::` | `panelExtension` (блочное) | цветная панель; типы `info`, `note`, `tip`, `success`, `warning`, `error` |
 | `[[toc]]` на отдельной строке | `tocExtension` | оглавление страницы |
 | `{{status:green:ГОТОВО}}` | `statusExtension` (строчное) | цветной статус; цвета `grey`, `red`, `yellow`, `green`, `blue`, `purple` |
+| `![название](ролик.mp4)` | переопределённый `renderer.image` | видеоплеер `<video controls preload="metadata">` вместо картинки, если у файла расширение видео (`src/utils/media.js`); иначе — обычная картинка. Подробнее — [Вложения](page:Вложения) |
 
 Устройство расширения: `start(src)` подсказывает парсеру, где может начаться конструкция, `tokenizer(src)` превращает текст в токен (содержимое панели разбирается как обычный Markdown через `this.lexer.blockTokens`), `renderer(token)` выдаёт HTML.
 

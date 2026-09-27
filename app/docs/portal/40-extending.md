@@ -87,8 +87,8 @@
 
 ## Новая страница этой документации
 
-1. Создайте `docs/portal/NN-название.md`.
-2. Добавьте её в дерево `docs/portal/manifest.json`: `{ "title": "…", "file": "NN-название.md", "labels": ["…"] }`.
+1. Создайте `app/docs/portal/NN-название.md`.
+2. Добавьте её в дерево `app/docs/portal/manifest.json`: `{ "title": "…", "file": "NN-название.md", "labels": ["…"] }`.
 3. Ссылайтесь на другие страницы как `[текст](page:Точный заголовок)`.
 4. `docker compose exec app npm run docs:import`. Изменившиеся страницы получат новую версию, остальные не изменятся.
 

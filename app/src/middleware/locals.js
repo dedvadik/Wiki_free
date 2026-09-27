@@ -18,6 +18,7 @@ import { DEFAULT_THEME_ID, getTheme } from '../services/themes.js';
 import { getCsrfToken } from './csrf.js';
 import * as format from '../utils/format.js';
 import { icon } from '../utils/icons.js';
+import { videoTypeFor } from '../utils/media.js';
 
 /* ----------------------------------------------------------------------------
  * Версия статических файлов = время запуска процесса. Добавляется к ссылкам
@@ -116,6 +117,8 @@ export function baseLocals(req) {
     initials,
     icon,
     pageUrl,
+    /* Воспроизводимое ли это видео (по расширению, список — utils/media.js). */
+    isVideoFile: (name) => Boolean(videoTypeFor(name)),
     roleNames: ROLE_NAMES,
   };
 }

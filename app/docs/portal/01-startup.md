@@ -16,6 +16,7 @@
 | `DATA_DIR` | `dataDir`, `uploadsDir` | `./data` | загрузки и сгенерированный секрет |
 | `CUSTOM_DIR` | `customDir` | `./custom` | переопределения шаблонов и статики |
 | `UPLOAD_MAX_MB` | `uploadMaxMb` | `20` | лимит размера вложения |
+| `VIDEO_MAX_MB` | `videoMaxMb` | `200` | лимит размера видео (оно воспроизводится на портале) |
 | `ADMIN_*` | `admin` | — | первый администратор |
 | `SEED_DEMO` | `seedDemo` | `true` | демо-пространство на пустой базе |
 | `BCRYPT_ROUNDS` | `bcryptRounds` | `10` | стоимость хеширования паролей |

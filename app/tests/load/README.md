@@ -1,6 +1,6 @@
 # Нагрузочное тестирование WikiSpace
 
-Сценарии для [k6](https://k6.io). Результаты последнего прогона и выводы есть на портале, в пространстве «Код портала» → «Нагрузочное тестирование» (файл `docs/portal/31-load-testing.md`).
+Сценарии для [k6](https://k6.io). Результаты последнего прогона и выводы есть на портале, в пространстве «Код портала» → «Нагрузочное тестирование» (файл `app/docs/portal/31-load-testing.md`).
 
 | Файл | Что проверяет |
 | --- | --- |
@@ -23,14 +23,14 @@ APP_PORT=18080 ADMIN_PASSWORD=Admin12345 POSTGRES_PASSWORD=testpass AUTH_RATE_LI
 docker compose -p wikitest exec app node src/tools/seed-load.js --yes
 ```
 
-Параметры генератора (`--users`, `--spaces`, `--pages`) и удаление данных (`--clean`) описаны в начале `src/tools/seed-load.js`.
+Параметры генератора (`--users`, `--spaces`, `--pages`) и удаление данных (`--clean`) описаны в начале `app/src/tools/seed-load.js`.
 
 ## 2. Запуск сценариев
 
 k6 запускается в Docker в той же сети, что и стенд, и обращается к нему по адресу `http://app:3000`:
 
 ```bash
-k6() { docker run --rm -i --network wikitest_default -v "$PWD/tests/load:/scripts" grafana/k6 run "$@"; }
+k6() { docker run --rm -i --network wikitest_default -v "$PWD/app/tests/load:/scripts" grafana/k6 run "$@"; }   # из корня репозитория
 
 k6 -e VUS=20 -e DURATION=60s /scripts/read-capacity.js
 k6 -e USERS=500 -e RAMP=2m -e HOLD=3m /scripts/users.js

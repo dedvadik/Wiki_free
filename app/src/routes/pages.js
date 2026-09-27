@@ -28,6 +28,7 @@
  * ============================================================================
  */
 import { Router } from 'express';
+import { config } from '../config.js';
 import { many, one, query, transaction } from '../db/pool.js';
 import { requireLogin, requireRole } from '../middleware/auth.js';
 import { buildLineDiff } from '../services/diff.js';
@@ -39,6 +40,7 @@ import { getSpaceAccess, requireSpaceAccess } from '../services/permissions.js';
 import { getSettings } from '../services/settings.js';
 import { hasRole } from '../services/users.js';
 import { backUrl, HttpError, parseId } from '../utils/http.js';
+import { VIDEO_EXT_LIST } from '../utils/media.js';
 import { loadSpace, loadSpaceWithAccess } from './spaces.js';
 
 export const pagesRouter = Router();
@@ -127,6 +129,9 @@ async function renderEditor(res, { space, page = null, form, errors = [], baseVe
     /* Для существующей страницы исключаем её саму и её поддерево из
      * списка возможных родителей. */
     parentOptions: flattenTree(tree, page?.id ?? null),
+    /* Лимиты загрузки и расширения видео — редактор проверяет размер файла
+     * до отправки и показывает видео плеером (data-атрибуты формы). */
+    uploadLimits: { fileMb: config.uploadMaxMb, videoMb: config.videoMaxMb, videoExt: VIDEO_EXT_LIST },
   });
 }
 

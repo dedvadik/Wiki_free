@@ -97,6 +97,7 @@ export function createApp({ sessionSecret }) {
    *    браузер выполнит JavaScript ТОЛЬКО из файлов нашего сайта ('self'),
    *    поэтому даже если в статью как-то попадёт <script>, он не запустится.
    *    - img-src https: — разрешаем картинки со сторонних сайтов в статьях;
+   *    - media-src 'self' — видео проигрываются только загруженные на портал;
    *    - style-src 'unsafe-inline' — для атрибутов style (цвет пространства);
    *    - upgrade-insecure-requests отключён: иначе сайт, открытый по http
    *      через IP-адрес в локальной сети, не загрузил бы свои стили;
@@ -106,6 +107,9 @@ export function createApp({ sessionSecret }) {
     contentSecurityPolicy: {
       directives: {
         'img-src': ["'self'", 'data:', 'https:'],
+        /* Видео — только загруженные на портал: чужие ролики
+         * по прямой ссылке не проигрываются и не «следят» за читателями. */
+        'media-src': ["'self'"],
         'script-src': ["'self'"],
         'style-src': ["'self'", "'unsafe-inline'"],
         'upgrade-insecure-requests': null,

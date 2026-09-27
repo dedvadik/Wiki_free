@@ -2,29 +2,34 @@
 #  .dockerignore — что НЕ отправлять в контекст сборки Docker.
 #  Меньше контекст → быстрее сборка; секреты и локальные данные не попадут
 #  в образ случайно.
+#  Контекст сборки — корень репозитория, код приложения — в папке app/
+#  (Dockerfile копирует из неё только src, views, public, docs и package*.json).
 # =============================================================================
 
 # Зависимости ставятся внутри образа заново (npm ci), локальные не нужны.
-node_modules
-npm-debug.log*
+**/node_modules
+**/npm-debug.log*
 
 # Локальные данные и секреты.
-data
-.env
-.env.*
+app/data
+**/.env
+**/.env.*
 !.env.example
 
 # Пользовательская кастомизация монтируется как volume, а не зашивается в образ.
 custom
+
+# Нагрузочные тесты k6 запускаются отдельным контейнером, в образ не нужны.
+app/tests
 
 # Служебное.
 .git
 .gitignore
 .vscode
 .idea
-*.md
-!src/seed/*.md
-!docs/**/*.md
+**/*.md
+!app/src/seed/*.md
+!app/docs/**/*.md
 Dockerfile
 docker-compose*.yml
 docker-bake.hcl
