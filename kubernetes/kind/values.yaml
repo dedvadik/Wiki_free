@@ -1,0 +1,84 @@
+# =============================================================================
+#  WikiSpace в Kubernetes от Docker Desktop (провайдер kind):
+#  1 управляющий узел + 3 рабочих (desktop-worker, -worker2, -worker3).
+#  Пошаговая инструкция — kubernetes/kind/README.md.
+#
+#     helm upgrade --install wiki ./kubernetes/helm/wikispace -n wiki --create-namespace -f kubernetes/kind/values.yaml
+#
+#  Особенности такого кластера:
+#   - все узлы — контейнеры ОДНОЙ виртуальной машины Docker Desktop: каждый
+#     «видит» всю её память, но на деле память общая. Поэтому ресурсы здесь
+#     скромные; дайте Docker Desktop побольше памяти (см. README);
+#   - образы, собранные локальным «docker build», узлы берут через зеркало
+#     Docker Desktop — реестр не нужен;
+#   - общий том для загрузок (ReadWriteMany) даёт NFS-сервер внутри кластера
+#     (класс хранения nfs, шаг 5 инструкции).
+# =============================================================================
+
+image:
+  repository: wikispace
+  # Меняйте тег при каждой новой сборке (1.0.1, 1.0.2…): узлы кэшируют образ,
+  # и с тем же тегом при pullPolicy IfNotPresent взяли бы старую версию.
+  tag: "1.0.0"
+  pullPolicy: IfNotPresent
+
+ingress:
+  className: nginx
+  # Пусто — портал отвечает на любое имя: http://localhost
+  host: ""
+
+app:
+  # Пароль администратора сгенерирует чарт (команда показать его — в выводе
+  # helm install). Можно задать свой: adminPassword: "…"
+  adminPassword: ""
+  timezone: Europe/Moscow
+
+web:
+  resources:
+    requests: { cpu: 200m, memory: 192Mi }
+    limits: { cpu: "1", memory: 512Mi }
+  nodeHeapMb: 384
+  autoscaling:
+    # По копии на каждом рабочем узле, при нагрузке — до трёх на узел.
+    minReplicas: 3
+    maxReplicas: 9
+    targetCPUUtilizationPercentage: 70
+  podDisruptionBudget:
+    minAvailable: 2
+  topologySpread:
+    # Строго поровну между рабочими узлами (разница не больше одной копии).
+    nodeWhenUnsatisfiable: DoNotSchedule
+    # У узлов kind нет меток зон — правило по зонам оставляем мягким.
+    zoneWhenUnsatisfiable: ScheduleAnyway
+
+persistence:
+  accessMode: ReadWriteMany
+  storageClass: nfs
+  size: 10Gi
+
+postgresql:
+  mode: cnpg
+  cnpg:
+    # Основной + 2 реплики — строго по одному экземпляру на рабочий узел.
+    instances: 3
+    podAntiAffinityType: required
+    storage:
+      size: 2Gi
+      storageClass: standard
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 768Mi }
+    parameters:
+      max_connections: "200"
+      shared_buffers: 128MB
+      effective_cache_size: 384MB
+      work_mem: 4MB
+      maintenance_work_mem: 64MB
+    # Если образы ghcr.io/cloudnative-pg не скачиваются (см. README, раздел
+    # «Если что-то пошло не так»), можно взять официальный образ postgres с
+    # Docker Hub: его пользователь postgres имеет UID 70.
+    # imageName: postgres:17-alpine
+    # extraSpec: { postgresUID: 70, postgresGID: 70 }
+  pooler:
+    instances: 2
+    defaultPoolSize: "20"

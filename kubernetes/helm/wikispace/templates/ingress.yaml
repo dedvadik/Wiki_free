@@ -25,13 +25,16 @@ metadata:
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- if .Values.ingress.tls.enabled }}
+  {{- if not .Values.ingress.host }}{{ fail "ingress.tls.enabled требует ingress.host (сертификат выдаётся на имя)" }}{{ end }}
   tls:
     - hosts: [{{ .Values.ingress.host | quote }}]
       secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
-    - host: {{ .Values.ingress.host | quote }}
-      http:
+    {{- /* Пустой host — правило для ЛЮБОГО имени: удобно локально
+           (http://localhost) и когда перед кластером нет DNS. */}}
+    - {{ with .Values.ingress.host }}host: {{ . | quote }}
+      {{ end }}http:
         paths:
           - path: /
             pathType: Prefix

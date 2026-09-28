@@ -173,12 +173,14 @@ spec:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
           whenUnsatisfiable: {{ .Values.web.topologySpread.nodeWhenUnsatisfiable }}
+          nodeTaintsPolicy: Honor   # не считать узлы, куда копия не может попасть (управляющий, чужие пулы)
           labelSelector:
             matchLabels:
               {{- include "wikispace.webSelector" . | nindent 14 }}
         - maxSkew: 1
           topologyKey: topology.kubernetes.io/zone
           whenUnsatisfiable: {{ .Values.web.topologySpread.zoneWhenUnsatisfiable }}
+          nodeTaintsPolicy: Honor
           labelSelector:
             matchLabels:
               {{- include "wikispace.webSelector" . | nindent 14 }}

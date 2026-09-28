@@ -1,7 +1,9 @@
 WikiSpace установлен: релиз «{{ .Release.Name }}», пространство имён «{{ .Release.Namespace }}».
 
-{{- if .Values.ingress.enabled }}
+{{- if and .Values.ingress.enabled .Values.ingress.host }}
 Адрес: http{{ if .Values.ingress.tls.enabled }}s{{ end }}://{{ .Values.ingress.host }}
+{{- else if .Values.ingress.enabled }}
+Адрес: любой, по которому доступен Ingress-контроллер (локально — http://localhost)
 {{- else }}
 Ingress выключен. Открыть локально:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "wikispace.web" . }} 8080:80

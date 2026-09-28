@@ -68,7 +68,9 @@ helm install wiki ./kubernetes/helm/wikispace -n wiki --create-namespace \
 kubectl -n wiki get secret wiki-wikispace-app -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d; echo
 ```
 
-Тестовый кластер из одного узла (k3s, kind, minikube, Docker Desktop) — без оператора и RWX-хранилища: `-f kubernetes/examples/values-small.yaml`.
+Тестовый кластер из одного узла (k3s, kind, minikube) — без оператора и RWX-хранилища: `-f kubernetes/examples/values-small.yaml`.
+
+**Kubernetes от Docker Desktop с провайдером kind (несколько узлов)** — отдельная пошаговая инструкция с готовыми настройками: [kubernetes/kind/README.md](kind/README.md).
 
 Обновление: `helm upgrade wiki ./kubernetes/helm/wikispace -n wiki -f …`. Копии обновляются по очереди без простоя. Миграции базы применяет init-контейнер новой копии до того, как она начнёт принимать запросы. Секрет сессий и пароль сохраняются, пользователей не разлогинивает.
 

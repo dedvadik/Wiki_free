@@ -1,0 +1,55 @@
+# =============================================================================
+#  Проверка общего тома ReadWriteMany (класс nfs) ДО установки портала:
+#  pod на узле desktop-worker пишет файл, pod на desktop-worker3 его читает.
+#     kubectl apply -f kubernetes/kind/nfs-test.yaml
+#     kubectl logs nfs-reader        # должен вывести строку от nfs-writer
+#     kubectl delete -f kubernetes/kind/nfs-test.yaml
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nfs-test
+spec:
+  accessModes: [ReadWriteMany]
+  storageClassName: nfs
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nfs-writer
+spec:
+  nodeSelector: { kubernetes.io/hostname: desktop-worker }
+  restartPolicy: Never
+  containers:
+    - name: writer
+      image: busybox:1.36
+      command: ["sh", "-c", "echo \"записано на узле $NODE\" > /data/test.txt && cat /data/test.txt"]
+      env:
+        - name: NODE
+          valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+      volumeMounts: [{ name: data, mountPath: /data }]
+  volumes:
+    - name: data
+      persistentVolumeClaim: { claimName: nfs-test }
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nfs-reader
+spec:
+  nodeSelector: { kubernetes.io/hostname: desktop-worker3 }
+  restartPolicy: Never
+  containers:
+    - name: reader
+      image: busybox:1.36
+      command: ["sh", "-c", "until [ -f /data/test.txt ]; do sleep 1; done; echo \"узел $NODE прочитал: $(cat /data/test.txt)\""]
+      env:
+        - name: NODE
+          valueFrom: { fieldRef: { fieldPath: spec.nodeName } }
+      volumeMounts: [{ name: data, mountPath: /data }]
+  volumes:
+    - name: data
+      persistentVolumeClaim: { claimName: nfs-test }

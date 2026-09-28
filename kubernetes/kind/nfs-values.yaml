@@ -1,0 +1,34 @@
+# =============================================================================
+#  NFS-сервер внутри кластера (nfs-server-provisioner / NFS-Ganesha) — даёт
+#  класс хранения «nfs» с доступом ReadWriteMany: один том загрузок сразу
+#  для всех копий WikiSpace на разных узлах.
+#
+#     helm upgrade --install nfs nfs-server-provisioner \
+#       --repo https://kubernetes-sigs.github.io/nfs-ganesha-server-and-external-provisioner/ \
+#       -n nfs --create-namespace -f kubernetes/kind/nfs-values.yaml
+#
+#  Сам сервер — один pod со своим томом на одном из узлов. Для локального
+#  стенда этого достаточно; в боевом кластере используйте хранилище облака
+#  или отказоустойчивое (CephFS, Longhorn RWX).
+# =============================================================================
+persistence:
+  enabled: true
+  storageClass: standard   # том самого NFS-сервера — на локальном диске узла
+  size: 20Gi
+
+storageClass:
+  name: nfs
+  defaultClass: false
+  # vers=3 + nolock: на узлах kind не запущена служба блокировок rpc.statd,
+  # а без nolock монтирование NFSv3 упало бы с ошибкой. Блокировки файлов
+  # WikiSpace не нужны: каждый загруженный файл пишется один раз под
+  # уникальным именем.
+  mountOptions:
+    - vers=3
+    - nolock
+    - retrans=2
+    - timeo=30
+
+resources:
+  requests: { cpu: 50m, memory: 64Mi }
+  limits: { memory: 256Mi }

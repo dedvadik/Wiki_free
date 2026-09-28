@@ -35,7 +35,7 @@ ingress:
   enabled: true
   # Класс контроллера: nginx (ingress-nginx), traefik (k3s), alb, …
   className: nginx
-  host: wiki.example.com
+  host: wiki.example.com   # пусто — отвечать на любое имя (например, http://localhost)
   tls:
     enabled: false
     # Секрет с сертификатом. С cert-manager он создаётся автоматически,
